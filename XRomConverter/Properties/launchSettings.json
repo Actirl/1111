@@ -1,8 +1,8 @@
 {
   "profiles": {
-    "MFMKBuilder": {
+    "XRomConverter": {
       "commandName": "Project",
-      "commandLineArgs": "D:\\EMU\\Vita3K\\Storage\\ux0\\app\\PCSG00683\\rom\r\n\"C:\\Program Files (x86)\\Steam\\steamapps\\common\\Hatsune Miku Project DIVA Mega Mix Plus\"\r\nOutput"
+      "commandLineArgs": "\"C:\\Users\\thatr\\Documents\\shadps4\\gamen\\CUSA04518\\rom\"\r\n\"Z:\\SteamLibrary\\steamapps\\common\\Hatsune Miku Project DIVA Mega Mix Plus\"\r\n\"Z:\\SteamLibrary\\steamapps\\common\\Hatsune Miku Project DIVA Mega Mix Plus\\mods\\XPS4Rom\""
     }
   }
 }

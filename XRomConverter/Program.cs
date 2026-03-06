@@ -88,9 +88,9 @@ internal class OsageSetting
 
 }
 
-internal class Program
+public class XRomConverter
 {
-    static void Main(string[] args)
+    public static void Convert(string[] args)
     {
         if (args.Length < 3)
         {
@@ -234,8 +234,7 @@ internal class Program
 
         if (isXHD)
         {
-            Console.WriteLine("XHD is currently unsupported, Please select a valid Project Diva X rom folder with unpacked data.");
-            return;
+            Console.WriteLine("XHD is support is experimental, things may break perhaps, idk really.");
         }
 
         // First we need to cache object set ids and object ids. X does this normally for object set ids only.
@@ -248,7 +247,7 @@ internal class Program
 
         foreach (var objfile in firstRead.AddonContentContainers[0].ObjsetFlist)
         {
-            FarcArchive objFarc = null;
+            FarcArchive? objFarc = null;
             ACCTPath objPathEntry = firstRead.AddonContentContainers[0].Paths.First(x => x.FileName == objfile);
             if (objPathEntry.Flags == ACCTPathMode.Packed)
             {
@@ -297,7 +296,7 @@ internal class Program
         MotionDatabase mmMotionData = cpk.Open<FarcArchive>("rom_ps4/rom/rob/mot_db.farc").Open<MotionDatabase>("mot_db.bin");
         SpriteDatabase mmSpriteData = cpk.Open<SpriteDatabase>("rom_steam/rom/2d/spr_db.bin");
 
-        BoneData xBoneData = null;
+        BoneData? xBoneData = null;
 
         ACCTPath bonePathentry = firstRead.AddonContentContainers[0].Paths.First(x => x.FileName == "bone_data.bon");
         if (bonePathentry.Flags == ACCTPathMode.Packed)
@@ -328,7 +327,7 @@ internal class Program
                                                                              { 9, "TETO"},
                                                                              { 10, "MIKU"}}; // Technically EXTRA, but EXTRA doesn't exist in MM.
 
-        Dictionary<string, List<string>> motClothSkirtOsageChains = new Dictionary<string,List<string>>()
+        Dictionary<string, List<string>> motClothSkirtOsageChains = new Dictionary<string, List<string>>()
         {
             {"j_cloth_skirt_b_000_wj", new List<string>(){"j_cloth_skirt_b_000_wj"} },
             {"j_cloth_skirt_f_000_wj", new List<string>(){"j_cloth_skirt_f_000_wj"} },
@@ -339,7 +338,7 @@ internal class Program
             {"j_cloth_skirt_r_04_000_wj", new List<string>(){"j_cloth_skirt_r_04_000_wj"} },
             {"j_cloth_skirt_r_06_000_wj", new List<string>(){"j_cloth_skirt_r_06_000_wj"} },
         };
-        
+
         Dictionary<string, List<string>> motClothLongOsageChains = new Dictionary<string, List<string>>()
         {
             {"j_cloth_long_f_000_wj", new List<string>(){"j_cloth_long_f_000_wj", "j_cloth_long_f_001_wj", "j_cloth_long_f_002_wj" } },
@@ -781,7 +780,7 @@ internal class Program
                 Nodes = { new OsageNodeParameter() { Radius = 0.01f, HingeYMax = 180f, HingeYMin = -180f, HingeZMax = 180f, HingeZMin = -180f, InertialCancel = 0f, Weight = 3f},
                           new OsageNodeParameter() { Radius = 0.01f, HingeYMax = 180f, HingeYMin = -180f, HingeZMax = 180f, HingeZMin = -180f, InertialCancel = 0f, Weight = 3f},
                           new OsageNodeParameter() { Radius = 0.01f, HingeYMax = 180f, HingeYMin = -180f, HingeZMax = 180f, HingeZMin = -180f, InertialCancel = 0f, Weight = 3f}
-                }, 
+                },
                 RotationY = 0f,
                 RotationZ = 0f,
                 Stiffness = 0f,
@@ -1254,7 +1253,7 @@ internal class Program
                 if (firstRead.AddonContentContainers[0].Auth2DFlist.Contains($"spr_mdl_thmb{module.ModuleID:D3}l.farc"))
                 {
                     ACCTPath sprPathEntry = firstRead.AddonContentContainers[0].Paths.First(x => x.FileName == $"spr_mdl_thmb{module.ModuleID:D3}l.farc");
-                    string sprPath = null;
+                    string? sprPath = null;
                     if (sprPathEntry.Flags == ACCTPathMode.Packed)
                     {
                         sprPath = Path.Combine(args[0], "data", $"spr_mdl_thmb{module.ModuleID:D3}l.farc");
@@ -1461,7 +1460,7 @@ internal class Program
 
                 chritmTbl.Write("cos", chritm.Costumes, x =>
                 {
-                    Console.WriteLine($"[{((CharacterType)i).ToString().ToUpper()}ITM_TABLE_CONVERSION] --> COS_{x.CostumeID+1:D3}");
+                    Console.WriteLine($"[{((CharacterType)i).ToString().ToUpper()}ITM_TABLE_CONVERSION] --> COS_{x.CostumeID + 1:D3}");
                     chritmTbl.Write("id", x.CostumeID);
                     chritmTbl.PushScope("item");
                     int curItmId = 0;
@@ -1670,7 +1669,7 @@ internal class Program
 
                 chritmTbl.Flush(chritmStream);
 
-             
+
                 chritmProp.Add($"{((CharacterType)i).ToString().ToLower()}itm_tbl.txt", chritmStream, false);
             }
 
@@ -1764,7 +1763,8 @@ internal class Program
         if (!args.Contains("-n"))
         {
             OsageSetting osageSetting = new OsageSetting()
-            { Categories = { new OsageSettingCategory() {Name = "long_tail_f", Osg = { new OsageSettingParameter() {EXF = 8, Parts = OsageSettingPartType.LEFT, Root = "c_hair_twin_l_osg"},
+            {
+                Categories = { new OsageSettingCategory() {Name = "long_tail_f", Osg = { new OsageSettingParameter() {EXF = 8, Parts = OsageSettingPartType.LEFT, Root = "c_hair_twin_l_osg"},
                                                                                        new OsageSettingParameter() {EXF = 8, Parts = OsageSettingPartType.RIGHT, Root = "c_hair_twin_r_osg"}
                                                                                      }
                                                         },
@@ -1781,7 +1781,7 @@ internal class Program
             {
                 Console.WriteLine($"[OBJECT_CONVERSION] --> {objsetName}");
 
-                FarcArchive conversionFarc = null;
+                FarcArchive? conversionFarc = null;
                 ACCTPath convPathEntry = firstRead.AddonContentContainers[0].Paths.FirstOrDefault(x => x.FileName == $"{objsetName.ToLower()}.farc");
                 if (convPathEntry.Flags == ACCTPathMode.Packed)
                 {
@@ -1829,7 +1829,7 @@ internal class Program
                 {
                     MikuMikuLibrary.Objects.Object head01 = xObjectSet.Objects.First(x => x.Name == $"{objsetName[0..3]}ITM000_ATAM_HEAD_01__DIVSKN");
                     MikuMikuLibrary.Objects.Object head07 = new MikuMikuLibrary.Objects.Object();
-                    
+
                     foreach (var mesh in head01.Meshes)
                     {
                         head07.Meshes.Add(mesh);
@@ -1880,7 +1880,7 @@ internal class Program
                     obj.Name = obj.Name.ToLower();
                     OsageSkinParameterSet osp = new OsageSkinParameterSet();
                     ACCTPath? skpPathEntry = firstRead.AddonContentContainers[0].Paths.FirstOrDefault(x => x.FileName == $"ext_skp_{obj.Name}.osp");
-                    string skpPath = null;
+                    string? skpPath = null;
                     if (skpPathEntry != null)
                     {
                         Console.WriteLine("[SKIN PARAMETER] - SkinParam exists");
@@ -1951,7 +1951,7 @@ internal class Program
                                 xconvMat.MaterialTextures[0] = mat.MaterialTextures[0];
                                 try
                                 {
-                                    xconvMat.MaterialTextures[0].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[0].TextureId).Name).Id;
+                                    xconvMat.MaterialTextures[0].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[0].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[0].TextureId;
                                 }
                                 catch
                                 {
@@ -1962,7 +1962,7 @@ internal class Program
                                 xconvMat.MaterialTextures[1] = mat.MaterialTextures[4];
                                 try
                                 {
-                                    xconvMat.MaterialTextures[1].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[1].TextureId).Name).Id;
+                                    xconvMat.MaterialTextures[1].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[1].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[1].TextureId;
                                 }
                                 catch
                                 {
@@ -1973,7 +1973,7 @@ internal class Program
                                 xconvMat.MaterialTextures[3] = mat.MaterialTextures[3];
                                 try
                                 {
-                                    xconvMat.MaterialTextures[3].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[3].TextureId).Name).Id;
+                                    xconvMat.MaterialTextures[3].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[3].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[3].TextureId;
                                 }
                                 catch
                                 {
@@ -1987,6 +1987,89 @@ internal class Program
                                 xMaterialFlags += 8192;
                             }
                             if (mat.ShaderName == "HAIR")
+                            {
+                                xMaterialFlags += 16384;
+                            }
+                            xconvMat.Ambient = new System.Numerics.Vector4(xconvMat.Ambient.X, xconvMat.Ambient.Y, xconvMat.Ambient.Z, (float)xMaterialFlags);
+                        }
+                        else if (mat.ShaderName == "SKIN_TH" || mat.ShaderName == "HAIR_TH" || mat.ShaderName == "OBJ_TH")
+                        {
+                            if (mat.MaterialTextures[0].TextureId != 212676728 && mat.MaterialTextures[0].TextureId != 1509989155)
+                            {
+                                xconvMat.MaterialTextures[0] = mat.MaterialTextures[0];
+                                try
+                                {
+                                    xconvMat.MaterialTextures[0].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[0].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[0].TextureId;
+                                }
+                                catch
+                                {
+                                }
+                            }
+                            if (mat.MaterialTextures[1].TextureId != 212676728 && mat.MaterialTextures[1].TextureId != 1509989155)
+                            {
+                                xconvMat.MaterialTextures[1] = mat.MaterialTextures[1];
+                                try
+                                {
+                                    xconvMat.MaterialTextures[1].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[1].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[1].TextureId;
+                                }
+                                catch
+                                {
+                                }
+                            }
+                            if (mat.MaterialTextures[2].TextureId != 212676728 && mat.MaterialTextures[2].TextureId != 1509989155)
+                            {
+                                xconvMat.MaterialTextures[2] = mat.MaterialTextures[2];
+                                try
+                                {
+                                    xconvMat.MaterialTextures[2].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[2].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[2].TextureId;
+                                }
+                                catch
+                                {
+                                }
+                            }
+                            if (mat.MaterialTextures[3].TextureId != 212676728 && mat.MaterialTextures[3].TextureId != 1509989155)
+                            {
+                                xconvMat.MaterialTextures[3] = mat.MaterialTextures[3];
+                                xconvMat.MaterialTextures[3].Type = MaterialTextureType.Transparency;
+                                try
+                                {
+                                    xconvMat.MaterialTextures[3].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[3].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[3].TextureId;
+                                }
+                                catch
+                                {
+                                }
+                            }
+                            if (mat.MaterialTextures[4].TextureId != 212676728 && mat.MaterialTextures[4].TextureId != 1509989155)
+                            {
+                                xconvMat.MaterialTextures[4] = mat.MaterialTextures[4];
+                                try
+                                {
+                                    xconvMat.MaterialTextures[4].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[4].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[4].TextureId;
+                                }
+                                catch
+                                {
+                                }
+                            }
+                            if (mat.MaterialTextures[5].TextureId != 212676728 && mat.MaterialTextures[5].TextureId != 1509989155)
+                            {
+                                xconvMat.MaterialTextures[5] = mat.MaterialTextures[5];
+                                xconvMat.MaterialTextures[5].Type = MaterialTextureType.EnvironmentCube;
+                                try
+                                {
+                                    xconvMat.MaterialTextures[5].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[5].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[5].TextureId;
+                                }
+                                catch
+                                {
+                                }
+                            }
+                            xconvMat.ShaderName = "ITEM";
+
+                            ushort xMaterialFlags = 32768;
+                            if (!args.Contains("-s"))
+                            {
+                                xMaterialFlags += 8192;
+                            }
+                            if (mat.ShaderName == "HAIR_TH")
                             {
                                 xMaterialFlags += 16384;
                             }
@@ -2096,8 +2179,7 @@ internal class Program
                                                     bone.Parent = obj.Skin.GetBoneInfoByName(motBlock.ParentName);
                                                 }
                                                 OsageBlock osgBlock = new OsageBlock();
-
-                                                osgBlock.ParentName = bone.Parent.Name;
+                                                osgBlock.ParentName = bone.Parent?.Name;
                                                 osgBlock.Name = $"e_{bone.Name.Substring(2, bone.Name.IndexOf($"_{chainStartOffset:D3}_wj") - 2)}";
                                                 osgBlock.ExternalName = $"c_{bone.Name.Substring(2, bone.Name.IndexOf($"_{chainStartOffset:D3}_wj") - 2)}_osg";
 
@@ -2201,7 +2283,7 @@ internal class Program
             modTexDb.Save(Path.Combine(args[2], "rom", "objset", "mod_tex_db.bin"));
 
             // Convert relevant motion sets
-            
+
             for (int i = 0; i < (int)CharacterType.EXT; i++)
             {
                 string charName = ((CharacterType)i).ToString();
@@ -2250,7 +2332,7 @@ internal class Program
                             return mot;
                         });
 
-                        for (int m = 0;  m < mmMotSet.Motions.Count; m++)
+                        for (int m = 0; m < mmMotSet.Motions.Count; m++)
                         {
                             if (mmMotSetInfo.Motions[m].Name.Contains(xFaceMot.Name))
                                 mmMotSet.Motions[m] = xFaceMot;
@@ -2290,5 +2372,13 @@ internal class Program
         }
 
         langToml.Close();
+    }
+}
+
+internal class Program
+{
+    static void Main(string[] args)
+    {
+        XRomConverter.Convert(args);
     }
 }
