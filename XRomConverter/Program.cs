@@ -243,7 +243,7 @@ public class XRomConverter
         Dictionary<uint, string> objectHashNameMap = new Dictionary<uint, string>();
         Dictionary<uint, string> textureHashNameMap = new Dictionary<uint, string>();
 
-        objectHashNameMap.Add(MikuMikuLibrary.Hashes.MurmurHash.Calculate("NULL"), "NULL");
+        //objectHashNameMap.Add(MikuMikuLibrary.Hashes.MurmurHash.Calculate("NULL"), "NULL");  // why did i do this
 
         foreach (var objfile in firstRead.AddonContentContainers[0].ObjsetFlist)
         {
@@ -327,6 +327,7 @@ public class XRomConverter
                                                                              { 9, "TETO"},
                                                                              { 10, "MIKU"}}; // Technically EXTRA, but EXTRA doesn't exist in MM.
 
+#region OsageCode
         Dictionary<string, List<string>> motClothSkirtOsageChains = new Dictionary<string, List<string>>()
         {
             {"j_cloth_skirt_b_000_wj", new List<string>(){"j_cloth_skirt_b_000_wj"} },
@@ -1227,6 +1228,7 @@ public class XRomConverter
             {"j_hair_long_l_01_000_wj", new List<string>(){"= 3 v 5.kl_kubi f neg", "= 4 v 3.cl_kao", "= 5 n 90 v 5.j_kao_wj g -"}},
             {"j_hair_long_r_01_000_wj", new List<string>(){"= 3 v 5.kl_kubi f neg", "= 4 v 3.cl_kao", "= 5 n 90 v 5.j_kao_wj g -"}},
         };
+        #endregion OsageCode
 
         ModuleTable moduleTable = firstRead.AddonContentContainers[0].ParameterDatabases[0].ModuleTable;
 
@@ -1249,7 +1251,6 @@ public class XRomConverter
 
             if (!args.Contains("-i"))
             {
-
                 if (firstRead.AddonContentContainers[0].Auth2DFlist.Contains($"spr_mdl_thmb{module.ModuleID:D3}l.farc"))
                 {
                     ACCTPath sprPathEntry = firstRead.AddonContentContainers[0].Paths.First(x => x.FileName == $"spr_mdl_thmb{module.ModuleID:D3}l.farc");
@@ -1274,6 +1275,7 @@ public class XRomConverter
                     SpriteDatabase spi = xSprFarc.Open<SpriteDatabase>($"spr_mdl_thmb{module.ModuleID:D3}l.spi");
                     SpriteSet spr = xSprFarc.Open<SpriteSet>($"spr_mdl_thmb{module.ModuleID:D3}l.spr");
 
+                    // not really needed to check this
                     if (mmSpriteData.SpriteSets.FirstOrDefault(x => x.Name == $"SPR_SEL_MD{module.ModuleID:D3}CMN") == null)
                     {
                         SpriteSetInfo modSprSetInfo = new SpriteSetInfo()
@@ -1329,16 +1331,7 @@ public class XRomConverter
                 }
             }
 
-            string moduleName = "";
-
-            foreach (var stra in firstRead.AddonContentContainers[0].StringArrays)
-            {
-                moduleName = stra.GetStringById(10010000 + module.ModuleID);
-                if (moduleName != "")
-                {
-                    break;
-                }
-            }
+            string moduleName = STRA.GetStringFromArraysById(10010000 + module.ModuleID, firstRead.AddonContentContainers[0].StringArrays);
 
             langToml.WriteLine($"module.{module.ModuleID} = \"{moduleName}\"");
 
@@ -1395,16 +1388,7 @@ public class XRomConverter
             gmCustomizeItemId.Write("chara", "ALL");
             gmCustomizeItemId.Write("id", custItem.ItemID);
 
-            string custItemName = "";
-
-            foreach (var stra in firstRead.AddonContentContainers[0].StringArrays)
-            {
-                custItemName = stra.GetStringById(10030000 + custItem.ItemID);
-                if (custItemName != "")
-                {
-                    break;
-                }
-            }
+            string custItemName = STRA.GetStringFromArraysById(10030000 + custItem.ItemID, firstRead.AddonContentContainers[0].StringArrays);
 
             langToml.WriteLine($"customize.{custItem.ItemID} = \"{custItemName}\"");
 
@@ -1520,15 +1504,7 @@ public class XRomConverter
                     chritmTbl.Write("face_depth", 0);
                     chritmTbl.Write("flag", 0);
 
-                    string res = "";
-                    foreach (var stra in firstRead.AddonContentContainers[0].StringArrays)
-                    {
-                        res = stra.GetStringById(int.Parse($"190{i:D2}{item.ItemNumber:D4}"));
-                        if (res != "")
-                        {
-                            break;
-                        }
-                    }
+                    string res = STRA.GetStringFromArraysById(int.Parse($"190{i:D2}{item.ItemNumber:D4}"), firstRead.AddonContentContainers[0].StringArrays);
 
                     if (res == "")
                     {
@@ -2062,18 +2038,19 @@ public class XRomConverter
                                 {
                                 }
                             }
-                            xconvMat.ShaderName = "ITEM";
-
-                            ushort xMaterialFlags = 32768;
-                            if (!args.Contains("-s"))
+                            switch (mat.ShaderName)
                             {
-                                xMaterialFlags += 8192;
+                                case "OBJ_TH":
+                                    xconvMat.ShaderName = "CLOTH";
+                                    break;
+                                case "SKIN_TH":
+                                    xconvMat.ShaderName = "SKIN";
+                                    break;
+                                case "HAIR_TH":
+                                    xconvMat.ShaderName = "HAIR";
+                                    break;
                             }
-                            if (mat.ShaderName == "HAIR_TH")
-                            {
-                                xMaterialFlags += 16384;
-                            }
-                            xconvMat.Ambient = new System.Numerics.Vector4(xconvMat.Ambient.X, xconvMat.Ambient.Y, xconvMat.Ambient.Z, (float)xMaterialFlags);
+                            xconvMat.Ambient = new System.Numerics.Vector4(xconvMat.Ambient.X, xconvMat.Ambient.Y, xconvMat.Ambient.Z, 1);
                         }
                         else
                         {
@@ -2100,23 +2077,6 @@ public class XRomConverter
                     {
                         Skeleton? xSkeleton = xBoneData.Skeletons.Find(x => x.Name == objsetName.Substring(0, 3));
                         Skeleton? mmSkeleton = mmBoneData.Skeletons.Find(x => x.Name == objsetName.Substring(0, 3));
-
-                        if (xSkeleton == null || mmSkeleton == null)
-                        {
-                            if (xBoneData.Skeletons.Count > 0 || mmBoneData.Skeletons.Count > 0)
-                            {
-                                xSkeleton = xBoneData.Skeletons[0];
-                                mmSkeleton = mmBoneData.Skeletons[0];
-                                if (xSkeleton == null || mmSkeleton == null)
-                                {
-                                    throw new InvalidDataException($"Skeleton for {objsetName.Substring(0, 3)} not in both bone datas, and CMN could not be located. Aborting.");
-                                }
-                            }
-                            else
-                            {
-                                throw new InvalidDataException($"A required bone data file contains no Skeletons. How is this possible? Aborting.");
-                            }
-                        }
 
                         foreach (var bone in obj.Skin.Bones)
                         {
