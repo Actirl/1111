@@ -2007,18 +2007,7 @@ public class XRomConverter
                             }
                             if (mat.MaterialTextures[1].TextureId != 212676728 && mat.MaterialTextures[1].TextureId != 1509989155)
                             {
-                                xconvMat.MaterialTextures[1] = mat.MaterialTextures[1];
-                                try
-                                {
-                                    xconvMat.MaterialTextures[1].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[1].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[1].TextureId;
-                                }
-                                catch
-                                {
-                                }
-                            }
-                            if (mat.MaterialTextures[2].TextureId != 212676728 && mat.MaterialTextures[2].TextureId != 1509989155)
-                            {
-                                xconvMat.MaterialTextures[2] = mat.MaterialTextures[2];
+                                xconvMat.MaterialTextures[2] = mat.MaterialTextures[1];
                                 try
                                 {
                                     xconvMat.MaterialTextures[2].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[2].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[2].TextureId;
@@ -2027,13 +2016,24 @@ public class XRomConverter
                                 {
                                 }
                             }
-                            if (mat.MaterialTextures[3].TextureId != 212676728 && mat.MaterialTextures[3].TextureId != 1509989155)
+                            if (mat.MaterialTextures[2].TextureId != 212676728 && mat.MaterialTextures[2].TextureId != 1509989155)
                             {
-                                xconvMat.MaterialTextures[3] = mat.MaterialTextures[3];
-                                xconvMat.MaterialTextures[3].Type = MaterialTextureType.Transparency;
+                                xconvMat.MaterialTextures[3] = mat.MaterialTextures[2];
                                 try
                                 {
                                     xconvMat.MaterialTextures[3].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[3].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[3].TextureId;
+                                }
+                                catch
+                                {
+                                }
+                            }
+                            if (mat.MaterialTextures[3].TextureId != 212676728 && mat.MaterialTextures[3].TextureId != 1509989155)
+                            {
+                                xconvMat.MaterialTextures[1] = mat.MaterialTextures[3];
+                                xconvMat.MaterialTextures[1].Type = MaterialTextureType.Color;
+                                try
+                                {
+                                    xconvMat.MaterialTextures[1].TextureId = modTexDb.GetTextureInfo(xTextureDatabase.GetTextureInfo(xconvMat.MaterialTextures[1].TextureId)?.Name ?? "")?.Id ?? xconvMat.MaterialTextures[1].TextureId;
                                 }
                                 catch
                                 {
