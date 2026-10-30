@@ -1,0 +1,67 @@
+name: XHD V03 Material Lighting Test
+on:
+  push:
+    paths:
+      - '.github/workflows/xhd-v03-material.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile shader
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git clone --depth 1 https://github.com/thtrandomlurker/MMShaderInjector.git upstream
+          if ($LASTEXITCODE -ne 0) { throw 'Git clone failed' }
+          New-Item -ItemType Directory -Force package/Shader/cso | Out-Null
+          $f = 'upstream/shader/item_blinn_chara_ps.hlsl'
+          $s = [IO.File]::ReadAllText((Resolve-Path $f))
+          $before = $s
+          # Branch 1: change actual diffuse/specular lighting, not final RGB gamma
+          $s = $s.Replace('float3 diffuseCol = (diffuseToneCurve.xyz * diffAvg.xyz * g_light_env_chara_diffuse.rgb) + (diffuseTex.xyz * emissionColor);','float3 diffuseCol = (diffuseToneCurve.xyz * diffAvg.xyz * g_light_env_chara_diffuse.rgb * 1.12) + (diffuseTex.xyz * emissionColor);')
+          $s = $s.Replace('float3 directLighting = fresnelToneCurve * fresnelColor + (specularCol * spcAvg * lc);','float3 directLighting = fresnelToneCurve * fresnelColor + (specularCol * spcAvg * lc * 1.16);')
+          # Branch 2: adjust only material light terms (IBL and environmental specular)
+          $s = $s.Replace('r4.xyz = g_light_env_chara_diffuse.xyz * r7.xyz;','r4.xyz = (g_light_env_chara_diffuse.xyz * 1.10) * r7.xyz;')
+          $s = $s.Replace('r7.xyz = r7.xyz * g_light_env_chara_diffuse.xyz + frg_vcolor.www;','r7.xyz = r7.xyz * (g_light_env_chara_diffuse.xyz * 1.10) + frg_vcolor.www;')
+          $s = $s.Replace('r2.xyz = g_light_env_chara_specular.xyz * r2.xyz;','r2.xyz = (g_light_env_chara_specular.xyz * 1.16) * r2.xyz;')
+          if ($s -eq $before) { throw 'No shader changes' }
+          [IO.File]::WriteAllText((Resolve-Path $f),$s)
+          $fxc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter fxc.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $fxc) { throw 'FXC not found' }
+          & $fxc.FullName /nologo /T ps_5_0 /E main /I upstream/shader /Fo package/Shader/cso/item_blinn_chara_ps.cso $f
+          if ($LASTEXITCODE -ne 0) { throw 'FXC failure' }
+          $b = [IO.File]::ReadAllBytes((Resolve-Path 'package/Shader/cso/item_blinn_chara_ps.cso'))
+          if ([Text.Encoding]::ASCII.GetString($b,0,4) -ne 'DXBC') { throw 'Not DXBC' }
+          Write-Host "Recompiled character shader $($b.Length) bytes"
+          Copy-Item $f package/item_blinn_chara_ps_V03.hlsl
+      - name: Build installer files
+        shell: pwsh
+        run: |
+          @(
+            'enabled = true'
+            'shader_F26E4F1F8307C313372849B214030440 = "item_blinn_chara_ps.cso"'
+            'author = "XHD V0.3 Material Test"'
+            'version = "0.3"'
+            'description = "Modified diffuse and specular lighting for one mapped character PS"'
+            'dll = ["MMShaderInjector.dll"]'
+            'include = ["."]'
+          ) | Set-Content package/config.toml -Encoding utf8
+          @(
+            'XHD V0.3 - MATERIAL LIGHTING EXPERIMENT'
+            'NEW FXC PS_5_0 compiled item_blinn_chara_ps.cso.'
+            'No RGB postgrade, no change to eye nonsss shader CE322995...'
+            'Lighting changes: character diffuse 1.10-1.12x, character specular 1.16x.'
+            'Only the mapped chara hash F26E4F1F... is replaced. Not the authentic XHD lighting equations.'
+            'Keep your WORKING luckee 2.0 MMShaderInjector.dll and its mod loader.'
+            'BACKUP existing mod directory before overlaying.'
+            'Copy config.toml and Shader/cso/item_blinn_chara_ps.cso into working injector mod.'
+            'Do not leave the previous V0.2 config.toml active: it patches the eyes.'
+            'Restart the game. If nothing changes on your module, this hash may not be used by that material.'
+            'For rollback restore original config.toml and all backups.'
+          ) | Set-Content package/README.txt -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-V03-Material-Lighting-Compiled
+          path: package/**
