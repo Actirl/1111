@@ -1,0 +1,78 @@
+name: Build XHD Renderer Visual Test V0.2
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/xhd-renderer-visual-v02.yml'
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch original HLSL
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/thtrandomlurker/MMShaderInjector.git upstream
+          if ($LASTEXITCODE -ne 0) { throw 'Clone failed' }
+      - name: Apply visible non-destructive character lighting experiment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path package/Shader/cso | Out-Null
+          foreach ($shader in @('item_blinn_nonsss_chara_ps','item_blinn_chara_ps')) {
+            $f = "upstream/shader/$shader.hlsl"
+            $s = [IO.File]::ReadAllText((Resolve-Path $f))
+            $pattern = '(?m)^(\s*)return;'
+            $returns = [regex]::Matches($s, $pattern)
+            Write-Host "$shader : return count = $($returns.Count)"
+            if ($returns.Count -lt 2) { throw "Unexpected branches in $shader" }
+            # Preserve alpha and depth/stencil outputs. Only adjust RGB.
+            # The power curve intentionally creates a visible shadow/highlight separation.
+            $addition = @'
+            // XHD visual EXPERIMENT: regrade character RGB only, preserving alpha.
+            float3 xhd_base = max(result.rgb, float3(0.0, 0.0, 0.0));
+            float3 xhd_curved = pow(xhd_base, float3(0.88, 0.92, 0.95));
+            result.rgb = saturate(xhd_curved * float3(0.96, 1.07, 1.14) + float3(0.003, 0.008, 0.014));
+'@
+            $s = [regex]::Replace($s, $pattern, { param($m) $addition + "`n" + $m.Groups[1].Value + 'return;' })
+            [IO.File]::WriteAllText((Resolve-Path $f),$s)
+            $fxc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter fxc.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+            if (-not $fxc) { throw 'FXC missing' }
+            & $fxc.FullName /nologo /T ps_5_0 /E main /I upstream/shader /Fo "package/Shader/cso/$shader.cso" $f
+            if ($LASTEXITCODE -ne 0) { throw "FXC compile failed for $shader" }
+            $bin = [IO.File]::ReadAllBytes((Resolve-Path "package/Shader/cso/$shader.cso"))
+            if ([Text.Encoding]::ASCII.GetString($bin,0,4) -ne 'DXBC') { throw 'Invalid DXBC' }
+            Write-Host "$shader compiled: $($bin.Length) bytes"
+          }
+      - name: Package
+        shell: pwsh
+        run: |
+          @'
+          enabled = true
+          shader_F26E4F1F8307C313372849B214030440 = "item_blinn_chara_ps.cso"
+          shader_CE32299546839F381B68AC0D072FC035 = "item_blinn_nonsss_chara_ps.cso"
+          author = "XHD Renderer visual experiment"
+          version = "0.2"
+          description = "NEW compiled HLSL character color grading, not authentic PS4 XHD equations"
+          dll = ["MMShaderInjector.dll"]
+          include = ["."]
+          '@ | Set-Content package/config.toml -Encoding utf8
+          @'
+          XHD Renderer V0.2 ACTUAL VISUAL EXPERIMENT
+          NEW: Both character shader HLSL sources altered and FXC recompiled into DXBC.
+          WHAT CHANGES: soft gamma lift, blue/cyan shift, shadow/bright-tone separation across mapped character materials. Alpha/depth preserved.
+          IMPORTANT: This is a prototype look test, NOT verified PS4 original XHD light transport.
+          Install: BACKUP existing injector mod folder. Keep your working luckee MMShaderInjector.dll. Overwrite config.toml and the two .cso in Shader/cso from this package. Restart game.
+          Before/after: enabled = true versus enabled = false in config.toml, restart game after edit.
+          Rollback: restore config and CSOs from backup.
+          Does not change stage/background shaders; additional mapped materials are not supported yet.
+          Source: thtrandomlurker/MMShaderInjector. Compiled by FXC on GitHub Actions Windows.
+          '@ | Set-Content package/README.txt -Encoding utf8
+          Copy-Item upstream/shader/item_blinn_nonsss_chara_ps.hlsl package/item_blinn_nonsss_chara_ps_V02.hlsl
+          Copy-Item upstream/shader/item_blinn_chara_ps.hlsl package/item_blinn_chara_ps_V02.hlsl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-Renderer-V0.2-Visible-Shader-Test
+          path: package/**
