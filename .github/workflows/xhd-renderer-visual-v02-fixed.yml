@@ -1,0 +1,71 @@
+name: Build XHD Renderer Visual V02 Fixed
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/xhd-renderer-visual-v02-fixed.yml'
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get upstream shader source
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/thtrandomlurker/MMShaderInjector.git upstream
+          if ($LASTEXITCODE -ne 0) { throw 'Clone failed' }
+      - name: Modify and compile two actual pixel shaders
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path package/Shader/cso | Out-Null
+          $fxc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter fxc.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $fxc) { throw 'FXC not found' }
+          $inject = 'float3 xhd_col = max(result.rgb, float3(0.0, 0.0, 0.0)); result.rgb = saturate(pow(xhd_col, float3(0.88, 0.92, 0.95)) * float3(0.96, 1.07, 1.14) + float3(0.003, 0.008, 0.014));'
+          foreach ($shader in @('item_blinn_nonsss_chara_ps','item_blinn_chara_ps')) {
+            $f = "upstream/shader/$shader.hlsl"
+            $s = [IO.File]::ReadAllText((Resolve-Path $f))
+            $pattern = '(?m)^(\s*)return;'
+            $count = [regex]::Matches($s,$pattern).Count
+            Write-Host "$shader return count: $count"
+            if ($count -lt 2) { throw "Missing expected return sites: $shader" }
+            $s = [regex]::Replace($s,$pattern,{param($m) $m.Groups[1].Value + $inject + "`n" + $m.Groups[1].Value + 'return;'})
+            [IO.File]::WriteAllText((Resolve-Path $f),$s)
+            & $fxc.FullName /nologo /T ps_5_0 /E main /I upstream/shader /Fo "package/Shader/cso/$shader.cso" $f
+            if ($LASTEXITCODE -ne 0) { throw "FXC failed: $shader" }
+            $b = [IO.File]::ReadAllBytes((Resolve-Path "package/Shader/cso/$shader.cso"))
+            if ([Text.Encoding]::ASCII.GetString($b,0,4) -ne 'DXBC') { throw "Bad compiled shader: $shader" }
+            Write-Host "Compiled $shader, $($b.Length) bytes"
+            Copy-Item $f "package/$shader.hlsl"
+          }
+      - name: Create ready to overlay config and guide
+        shell: pwsh
+        run: |
+          $cfg = @(
+            'enabled = true'
+            'shader_F26E4F1F8307C313372849B214030440 = "item_blinn_chara_ps.cso"'
+            'shader_CE32299546839F381B68AC0D072FC035 = "item_blinn_nonsss_chara_ps.cso"'
+            'author = "XHD Renderer Visual Experiment"'
+            'version = "0.2"'
+            'description = "Recompiled character pixel shaders with visible gamma and cool tone changes"'
+            'dll = ["MMShaderInjector.dll"]'
+            'include = ["."]'
+          )
+          $cfg | Set-Content package/config.toml -Encoding utf8
+          $readme = @(
+            'XHD Renderer V0.2 - ACTUAL VISUAL CHANGE'
+            'Two character shaders newly patched and compiled with Windows FXC ps_5_0.'
+            'Visible experiment: boosted brighter cyan-blue light response and adjusted RGB gamma.'
+            'This is NOT proven to be the exact original PS4 XHD lighting algorithm.'
+            'Install: Keep your working luckee 2.0 MMShaderInjector.dll. Backup your current config.toml and Shader/cso files first.'
+            'Copy config.toml and Shader/cso/*.cso from this archive into the existing mod folder. Restart Mega39s+.'
+            'Turn enabled to false and restart to compare. To restore, put your original config and CSO back.'
+            'Only two mapped character shader hashes are changed; other materials/stage might look unchanged.'
+          )
+          $readme | Set-Content package/README.txt -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-Renderer-V0.2-New-Compiled-CSO
+          path: package/**
