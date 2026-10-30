@@ -1,0 +1,69 @@
+name: Build MMShader XHD Magenta Diagnostic
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/mmshader-xhd-diagnostic.yml'
+jobs:
+  build-diagnostic:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Fetch upstream HLSL
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/thtrandomlurker/MMShaderInjector.git mmshader-upstream
+          if ($LASTEXITCODE -ne 0) { throw 'Clone failed' }
+      - name: Patch two HLSL return branches to magenta
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $f = 'mmshader-upstream/shader/item_blinn_nonsss_chara_ps.hlsl'
+          $s = [IO.File]::ReadAllText((Resolve-Path $f))
+          $pattern = '(?m)^(\s*)return;'
+          $m = [regex]::Matches($s, $pattern)
+          Write-Host "Found $($m.Count) returns"
+          if ($m.Count -ne 2) { throw 'Unexpected HLSL layout' }
+          $s = [regex]::Replace($s, $pattern, '$1result.rgb = float3(1.0, 0.0, 1.0);' + "`n" + '$1return;')
+          [IO.File]::WriteAllText((Resolve-Path $f), $s)
+          New-Item -ItemType Directory -Force -Path 'package/Shader/cso' | Out-Null
+          $fxc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter fxc.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $fxc) { throw 'fxc.exe missing from Windows SDK' }
+          & $fxc.FullName /nologo /T ps_5_0 /E main /I mmshader-upstream/shader /Fo package/Shader/cso/item_blinn_nonsss_chara_ps.cso $f
+          if ($LASTEXITCODE -ne 0) { throw 'FXC compile failed' }
+          $data = [IO.File]::ReadAllBytes((Resolve-Path 'package/Shader/cso/item_blinn_nonsss_chara_ps.cso'))
+          if ([Text.Encoding]::ASCII.GetString($data,0,4) -ne 'DXBC') { throw 'Not a DXBC file' }
+          Write-Host "Compiled DXBC size: $($data.Length) bytes"
+      - name: Write installation files
+        shell: pwsh
+        run: |
+          @'
+          enabled = true
+          shader_CE32299546839F381B68AC0D072FC035 = "item_blinn_nonsss_chara_ps.cso"
+          author = "MMShader XHD Diagnostic (upstream thtrandomlurker)"
+          version = "0.2"
+          description = "Temporary magenta pixel-shader diagnosis"
+          dll = ["MMShaderInjector.dll"]
+          include = ["."]
+          '@ | Set-Content 'package/config.toml' -Encoding utf8
+          @'
+          MMShader XHD V0.2 - MAGENTA DIAGNOSTIC
+          This is an experimental compiled HLSL shader, NOT a complete replacement DLL.
+          Backup your current MMShaderInjector installation. Exit the game fully.
+          Keep the CURRENT luckee 2.0 MMShaderInjector.dll.
+          Replace config.toml and Shader/cso/item_blinn_nonsss_chara_ps.cso
+          in the SAME installed mod folder, preserving folder structure.
+          Do not use it as a final visual mod: this target shader may tint eyes, face,
+          hair, or other materials magenta. It only proves replacement if a visible
+          render changes. If nothing changes, test injector loading/config separately.
+          Restore backups after the test.
+          Upstream HLSL source: https://github.com/thtrandomlurker/MMShaderInjector
+          '@ | Set-Content 'package/README.txt' -Encoding utf8
+      - name: Upload diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MMShader-XHD-V0.2-Magenta-Compiled
+          path: package/**
