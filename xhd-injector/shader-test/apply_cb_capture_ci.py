@@ -35,5 +35,6 @@ for old,new in rules:
  if s.count(old)!=1:raise SystemExit("Unexpected source for "+old[:48])
  s=s.replace(old,new,1)
 assert 'PSSetConstantBuffers' not in s
+assert 'PSSetShaderResources(24' not in s
 p.write_text(s,encoding="utf-8")
 print("Injected observer-only constant-buffer snapshot into temporary CI build")
