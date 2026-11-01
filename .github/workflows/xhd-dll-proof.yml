@@ -31,22 +31,25 @@ jobs:
           foreach($name in @('Init','D3DInit','OnFrame')) { if($exports -notmatch "(?m)\s$name\s*$") { throw "Missing export $name" } }
           New-Item -ItemType Directory -Force dist/Observer | Out-Null
           Copy-Item $dll dist/Observer/XHDEyeInjector.dll
+          $shader64='RFhCQ1x/uGsdymXoFePeALm0/rIBAAAA6AEAAAUAAAA0AAAAoAAAANQAAAAIAQAATAEAAFJERUZkAAAAAAAAAAAAAAAAAAAAPAAAAAAF//8AAQAAPAAAAFJEMTE8AAAAGAAAACAAAAAoAAAAJAAAAAwAAAAAAAAATWljcm9zb2Z0IChSKSBITFNMIFNoYWRlciBDb21waWxlciAxMC4xAElTR04sAAAAAQAAAAgAAAAgAAAAAAAAAAEAAAADAAAAAAAAAA8AAABTVl9Qb3NpdGlvbgBPU0dOLAAAAAEAAAAIAAAAIAAAAAAAAAAAAAAAAwAAAAAAAAAPAAAAU1ZfVGFyZ2V0AKurU0hFWDwAAABQAAAADwAAAGoIAAFlAAAD8iAQAAAAAAA2AAAI8iAQAAAAAAACQAAAAACAPwAAAAAAAIA/AACAPz4AAAFTVEFUlAAAAAIAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+          [IO.File]::WriteAllBytes((Join-Path (Resolve-Path dist/Observer) 'replacement.cso'),[Convert]::FromBase64String($shader64))
+          "[settings]`nenable_replacement=1" | Set-Content dist/Observer/xhd_injector.ini -Encoding ascii
           @'
           enabled = true
           dll = ["XHDEyeInjector.dll"]
           name = "XHD D3D11 Shader Observer"
           author = "XHD experiment"
           version = "0.3"
-          description = "Diagnostic-only D3D11 PS observer. No shader replacement."
+          description = "Independent DXBC magenta injection visual test; not original XHD shader."
           '@ | Set-Content dist/Observer/config.toml -Encoding utf8
           @'
           EXPERIMENTAL OBSERVER ONLY — not XHD rendering restoration.
           Install as its own DivaModLoader mod. Disable other shader injectors initially.
-          This mod does not change colors or shader output.
+          This mod attempts visible magenta replacement on the target shader hash; may affect multiple character materials.
           Locate xhd_shader_observer.log beside the DLL after starting the game.
           Expected startup: observer init; unmodified shader mode
           Expected hook: CreatePixelShader observer hook enabled
-          Expected periodic: frames=600 hook=1 CreatePS=N target=M
+          Expected periodic: frames=600 hook=1 CreatePS=N target=M replaced=R fail=F
           If no log is created, loader hook/export integration is not verified.
           Do not use together with prior crashing shader mods.
           '@ | Set-Content dist/Observer/README.txt -Encoding utf8
@@ -54,7 +57,7 @@ jobs:
           if(!(Test-Path dist/XHD_D3D11_Observer_Mod.zip)) {throw 'Package missing'}
       - uses: actions/upload-artifact@v4
         with:
-          name: XHD-D3D11-Observer-Mod-Experimental
+          name: XHD-Independent-Magenta-Visual-Test-Unverified
           path: |
             dist/XHD_D3D11_Observer_Mod.zip
             xhd-injector/build/Release/XHDEyeInjector.dll
