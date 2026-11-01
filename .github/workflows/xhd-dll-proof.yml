@@ -22,8 +22,7 @@ jobs:
           $dll='xhd-injector/build/Release/XHDEyeInjector.dll'
           if (!(Test-Path $dll)) { throw 'DLL missing' }
           Get-Item $dll | Format-List Name,Length
-          $exports = & dumpbin /exports $dll
-          $exports | Select-String 'Init|D3DInit|OnFrame'
+          if ((Get-Item $dll).Length -lt 10000) { throw 'DLL unexpectedly small' }
       - uses: actions/upload-artifact@v4
         with:
           name: XHD-D3D11-Observer-DLL-Unverified-InGame
