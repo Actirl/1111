@@ -1,0 +1,31 @@
+name: XHD Independent Injector Windows Build
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'xhd-injector/**'
+      - '.github/workflows/xhd-injector-build.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: xhd-injector
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -A x64
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package
+        shell: pwsh
+        run: ./打包MOD.ps1
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: XHD-Independent-Injector-Test
+          path: xhd-injector/dist/*.zip
