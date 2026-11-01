@@ -36,5 +36,22 @@ for old,new in rules:
  s=s.replace(old,new,1)
 assert 'PSSetConstantBuffers' not in s
 assert 'PSSetShaderResources(24' not in s
+# Record candidate high-slot ownership at the first matched eye draw.
+probe=''' ID3D11ShaderResourceView* hi[4]={};
+ context->PSGetShaderResources(24,4,hi);
+ for(unsigned k=0;k<4;k++){
+  char m[128];
+  if(hi[k]){
+   D3D11_SHADER_RESOURCE_VIEW_DESC d={};hi[k]->GetDesc(&d);
+   sprintf_s(m,"eye slot t%u occupied=1 dim=%u",k+24,(unsigned)d.ViewDimension);
+   hi[k]->Release();
+  }else sprintf_s(m,"eye slot t%u occupied=0",k+24);
+  writeLog(m);
+ }
+'''
+anchor='writeLog("First matched draw: capturing bound pixel-shader resources");'
+assert s.count(anchor)==1
+s=s.replace(anchor,anchor+'\\n'+probe.replace('\\n','\\n'))
+
 p.write_text(s,encoding="utf-8")
 print("Injected observer-only constant-buffer snapshot into temporary CI build")
