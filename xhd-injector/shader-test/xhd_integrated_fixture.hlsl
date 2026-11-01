@@ -1,11 +1,11 @@
 // Integration harness only. This is NOT a game-compatible eye replacement.
-// PS4 sample textures remain diagnostic PC t0-t3 bindings; not actual PS4 binding map.
+// Isolated diagnostic slots t24-t27, NOT confirmed free in every original PC draw.\n// Runtime SRV binding and real PS4 texture arrays are REQUIRED before game use.
 #include "xhd_sampling_common.hlsl"
 #include "xhd_rt1_captured_draw.hlsl"
-Texture2D<float4> ps4B5 : register(t0);
-Texture2DArray<float4> ps4B6 : register(t1);
-Texture2DArray<float4> ps4B7Array : register(t2);
-Texture2D<float4> ps4B7Flat : register(t3);
+Texture2D<float4> ps4B5 : register(t24);
+Texture2DArray<float4> ps4B6 : register(t25);
+Texture2DArray<float4> ps4B7Array : register(t26);
+Texture2D<float4> ps4B7Flat : register(t27);
 SamplerState sm5 : register(s0);
 SamplerState sm6 : register(s1);
 SamplerState sm7 : register(s2);
