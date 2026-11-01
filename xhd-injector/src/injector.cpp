@@ -18,7 +18,8 @@ static std::atomic<bool> enabled{false};
 static std::atomic<unsigned long> replaced{0}, failed{0};
 static std::vector<unsigned char> replacement;
 static bool replacementOn=false;
-static std::atomic<bool> firstHookLog{false};
+static std::atomic<bool> captured{false};
+static wchar_t originalShaderFile[MAX_PATH] = L"xhd_target_original_runtime.cso";
 static wchar_t logfile[MAX_PATH] = L"xhd_shader_observer.log";
 static const unsigned char target[16]={0xCE,0x32,0x29,0x95,0x46,0x83,0x9F,0x38,0x1B,0x68,0xAC,0x0D,0x07,0x2F,0xC0,0x35};
 static void writeLog(const char* message){
@@ -32,7 +33,7 @@ static void setup(){
  reinterpret_cast<LPCWSTR>(&setup),&module)){
  if(GetModuleFileNameW(module,path,MAX_PATH)){
  wchar_t* slash=wcsrchr(path,L'\\');
- if(slash){slash[1]=0;swprintf_s(logfile,L"%ls%ls",path,L"xhd_shader_observer.log");}
+ if(slash){slash[1]=0;swprintf_s(logfile,L"%ls%ls",path,L"xhd_shader_observer.log");swprintf_s(originalShaderFile,L"%ls%ls",path,L"xhd_target_original_runtime.cso");}
  }
  }
  wchar_t ini[MAX_PATH]={0}, shader[MAX_PATH]={0};
@@ -53,6 +54,17 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
  created.fetch_add(1,std::memory_order_relaxed);
  if(data&&len>=36&&memcmp(data,"DXBC",4)==0&&memcmp((const unsigned char*)data+4,target,16)==0){
    hits.fetch_add(1,std::memory_order_relaxed);
+   bool expected=false;
+   if(len<=4*1024*1024 && captured.compare_exchange_strong(expected,true)){
+     FILE* capture=nullptr;
+     if(_wfopen_s(&capture,originalShaderFile,L"wb")==0 && capture){
+       size_t written=fwrite(data,1,len,capture);fclose(capture);
+       writeLog(written==len?"captured original matching shader DXBC":"original DXBC capture incomplete");
+     } else {
+       captured.store(false);
+       writeLog("original DXBC capture failed: file access");
+     }
+   }
    if(replacementOn&&!replacement.empty()&&out){
      ID3D11PixelShader* candidate=nullptr;
      HRESULT status=original(dev,replacement.data(),replacement.size(),link,&candidate);
@@ -63,8 +75,8 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
  }
  return original(dev,data,len,link,out);
 }
-extern "C" __declspec(dllexport) void PreInit(){static std::once_flag once;std::call_once(once,setup);writeLog("PreInit called");}
-extern "C" __declspec(dllexport) void Init(){PreInit();writeLog("Init called");}
+extern "C" __declspec(dllexport) void PreInit(){static std::once_flag once;std::call_once(once,setup);}
+extern "C" __declspec(dllexport) void Init(){PreInit();}
 extern "C" __declspec(dllexport) void PostInit(){writeLog("PostInit called");}
 extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,ID3D11DeviceContext*){
  Init();
@@ -79,7 +91,7 @@ extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,
  enabled=true;writeLog("CreatePixelShader observer hook enabled");
 }
 extern "C" __declspec(dllexport) void OnFrame(IDXGISwapChain*){
- Init();
+ PreInit();
  const unsigned long frame=++frames;
  if(frame==1||frame%600==0){
  char buf[160];
