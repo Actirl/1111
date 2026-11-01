@@ -1,8 +1,9 @@
-name: XHD DLL Compile Proof
+name: XHD D3D11 Shader Observer Build
 on:
   workflow_dispatch:
   push:
     paths:
+      - 'xhd-injector/**'
       - '.github/workflows/xhd-dll-proof.yml'
 permissions:
   contents: read
@@ -21,8 +22,10 @@ jobs:
           $dll='xhd-injector/build/Release/XHDEyeInjector.dll'
           if (!(Test-Path $dll)) { throw 'DLL missing' }
           Get-Item $dll | Format-List Name,Length
+          $exports = & dumpbin /exports $dll
+          $exports | Select-String 'Init|D3DInit|OnFrame'
       - uses: actions/upload-artifact@v4
         with:
-          name: XHD-Compile-Probe-DLL-Not-Injecting
+          name: XHD-D3D11-Observer-DLL-Unverified-InGame
           path: xhd-injector/build/Release/XHDEyeInjector.dll
           if-no-files-found: error
