@@ -25,6 +25,9 @@ static std::atomic<bool> enabled{false};
 static std::atomic<unsigned long> replaced{0}, failed{0};
 static std::vector<unsigned char> replacement;
 static bool replacementOn=false;
+static bool neutralizeT3=false;
+static ID3D11ShaderResourceView* whiteT3=nullptr;
+static std::atomic<unsigned long> neutralizedDraws{0};
 static std::atomic<bool> captured{false};
 static wchar_t originalShaderFile[MAX_PATH] = L"xhd_target_original_runtime.cso";
 static wchar_t logfile[MAX_PATH] = L"xhd_shader_observer.log";
@@ -143,6 +146,25 @@ static void captureBindings(ID3D11DeviceContext* context){
 }
 static void STDMETHODCALLTYPE observeDrawIndexed(ID3D11DeviceContext* context,UINT count,UINT start,INT base){
  captureBindings(context);
+ if(neutralizeT3 && whiteT3){
+  ID3D11PixelShader* current=nullptr;context->PSGetShader(&current,nullptr,nullptr);
+  bool matched=false;
+  if(current){
+   {std::lock_guard<std::mutex> lock(shaderMutex);
+    matched=std::find(activeTargets.begin(),activeTargets.end(),current)!=activeTargets.end();}
+   current->Release();
+  }
+  if(matched){
+   ID3D11ShaderResourceView* prior=nullptr;
+   context->PSGetShaderResources(3,1,&prior);
+   context->PSSetShaderResources(3,1,&whiteT3);
+   originalDrawIndexed(context,count,start,base);
+   context->PSSetShaderResources(3,1,&prior);
+   if(prior)prior->Release();
+   neutralizedDraws.fetch_add(1);
+   return;
+  }
+ }
  originalDrawIndexed(context,count,start,base);
 }
 static void disassembleOriginalShader(const void* data,SIZE_T len){
@@ -177,6 +199,8 @@ static void setup(){
  swprintf_s(ini,L"%ls%ls",path,L"xhd_injector.ini");
  swprintf_s(shader,L"%ls%ls",path,L"replacement.cso");
  replacementOn=GetPrivateProfileIntW(L"settings",L"enable_replacement",0,ini)!=0;
+ neutralizeT3=GetPrivateProfileIntW(L"settings",L"neutralize_t3",0,ini)!=0;
+ if(neutralizeT3)replacementOn=false;
  FILE* f=nullptr;
  if(_wfopen_s(&f,shader,L"rb")==0&&f){
    fseek(f,0,SEEK_END);long n=ftell(f);rewind(f);
@@ -211,7 +235,12 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
      failed.fetch_add(1);
    }
  }
- return original(dev,data,len,link,out);
+ HRESULT result=original(dev,data,len,link,out);
+ if(neutralizeT3 && data && len>=36 && memcmp(data,"DXBC",4)==0 &&
+    memcmp((const unsigned char*)data+4,target,16)==0 && SUCCEEDED(result) && out && *out){
+   std::lock_guard<std::mutex> lock(shaderMutex);activeTargets.push_back(*out);
+ }
+ return result;
 }
 extern "C" __declspec(dllexport) void PreInit(){static std::once_flag once;std::call_once(once,setup);}
 extern "C" __declspec(dllexport) void Init(){PreInit();}
@@ -219,6 +248,16 @@ extern "C" __declspec(dllexport) void PostInit(){writeLog("PostInit called");}
 extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,ID3D11DeviceContext* context){
  Init();
  if(!dev){writeLog("D3DInit: device null");return;}
+ if(neutralizeT3 && !whiteT3){
+  const unsigned char white[4]={255,255,255,255};
+  D3D11_TEXTURE2D_DESC td={};td.Width=1;td.Height=1;td.MipLevels=1;td.ArraySize=1;td.Format=DXGI_FORMAT_R8G8B8A8_UNORM;td.SampleDesc.Count=1;td.Usage=D3D11_USAGE_IMMUTABLE;td.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+  D3D11_SUBRESOURCE_DATA initial={};initial.pSysMem=white;initial.SysMemPitch=4;
+  ID3D11Texture2D* tex=nullptr;
+  if(SUCCEEDED(dev->CreateTexture2D(&td,&initial,&tex))){
+   if(SUCCEEDED(dev->CreateShaderResourceView(tex,nullptr,&whiteT3)))writeLog("t3 neutralization resource created");
+   tex->Release();
+  }
+ }
  std::lock_guard<std::mutex> lock(hookMutex);
  if(enabled.load())return;
  void* addr=(*reinterpret_cast<void***>(dev))[15];
@@ -239,7 +278,7 @@ extern "C" __declspec(dllexport) void OnFrame(IDXGISwapChain*){
  const unsigned long frame=++frames;
  if(frame==1||frame%600==0){
  char buf[160];
- sprintf_s(buf,"frames=%lu hook=%d CreatePS=%lu target=%lu replaced=%lu fail=%lu",frame,enabled.load()?1:0,created.load(),hits.load(),replaced.load(),failed.load());
+ sprintf_s(buf,"frames=%lu hook=%d CreatePS=%lu target=%lu replaced=%lu fail=%lu t3neutral_draws=%lu",frame,enabled.load()?1:0,created.load(),hits.load(),replaced.load(),failed.load(),neutralizedDraws.load());
  writeLog(buf);
  }
 }
