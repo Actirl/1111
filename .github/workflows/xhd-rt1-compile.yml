@@ -1,0 +1,30 @@
+name: XHD PC RT1 Fixture HLSL Verify
+on:
+  push:
+    branches: [xhd-injector-build-test]
+    paths:
+      - 'xhd-injector/shader-test/*rt1*.hlsl'
+      - '.github/workflows/xhd-rt1-compile.yml'
+  workflow_dispatch:
+jobs:
+  compile:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate FXC and compile RT1 standalone fixture
+        shell: pwsh
+        run: |
+          $fxc = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter fxc.exe -Recurse | Where-Object FullName -Match 'x64' | Select-Object -Last 1 -ExpandProperty FullName
+          if (-not $fxc) { throw "FXC missing" }
+          & $fxc /nologo /T ps_5_0 /E PSRT1CapturedDrawTest /Fo pc_eye_rt1_fixture.cso /Fc pc_eye_rt1_fixture.asm xhd-injector/shader-test/rt1_compile_harness.hlsl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path pc_eye_rt1_fixture.cso)) {throw 'DXBC missing'}
+          $asm=Get-Content pc_eye_rt1_fixture.asm -Raw
+          if ($asm -notmatch 'SV_Target1') {throw 'Second target absent'}
+          Write-Host "RT1 dual-output fixture compiled. NOT a game replacement."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-PC-RT1-Captured-Draw-Fixture
+          path: |
+            pc_eye_rt1_fixture.cso
+            pc_eye_rt1_fixture.asm
