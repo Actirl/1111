@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.21)
+project(XHDEyeInjector LANGUAGES CXX)
+include(FetchContent)
+FetchContent_Declare(minhook GIT_REPOSITORY https://github.com/TsudaKageyu/minhook.git GIT_TAG v1.3.4)
+FetchContent_MakeAvailable(minhook)
+add_library(XHDEyeInjector SHARED src/injector.cpp)
+target_compile_features(XHDEyeInjector PRIVATE cxx_std_17)
+target_link_libraries(XHDEyeInjector PRIVATE minhook d3d11)
