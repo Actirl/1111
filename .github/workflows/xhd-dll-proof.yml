@@ -16,15 +16,46 @@ jobs:
         run: cmake -S xhd-injector -B xhd-injector/build -A x64
       - name: Compile DLL
         run: cmake --build xhd-injector/build --config Release --parallel
-      - name: Verify artifact
+      - name: Verify and package observer
         shell: pwsh
         run: |
+          $ErrorActionPreference='Stop'
           $dll='xhd-injector/build/Release/XHDEyeInjector.dll'
           if (!(Test-Path $dll)) { throw 'DLL missing' }
-          Get-Item $dll | Format-List Name,Length
           if ((Get-Item $dll).Length -lt 10000) { throw 'DLL unexpectedly small' }
+          $vswhere="${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs=& $vswhere -latest -products * -property installationPath
+          $dump=Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          if (!$dump) { throw 'dumpbin.exe not found' }
+          $exports=& $dump.FullName /exports $dll | Out-String
+          foreach($name in @('Init','D3DInit','OnFrame')) { if($exports -notmatch "(?m)\s$name\s*$") { throw "Missing export $name" } }
+          New-Item -ItemType Directory -Force dist/Observer | Out-Null
+          Copy-Item $dll dist/Observer/XHDEyeInjector.dll
+          @'
+          enabled = true
+          dll = ["XHDEyeInjector.dll"]
+          name = "XHD D3D11 Shader Observer"
+          author = "XHD experiment"
+          version = "0.3"
+          description = "Diagnostic-only D3D11 PS observer. No shader replacement."
+          '@ | Set-Content dist/Observer/config.toml -Encoding utf8
+          @'
+          EXPERIMENTAL OBSERVER ONLY — not XHD rendering restoration.
+          Install as its own DivaModLoader mod. Disable other shader injectors initially.
+          This mod does not change colors or shader output.
+          Locate xhd_shader_observer.log beside the DLL after starting the game.
+          Expected startup: observer init; unmodified shader mode
+          Expected hook: CreatePixelShader observer hook enabled
+          Expected periodic: frames=600 hook=1 CreatePS=N target=M
+          If no log is created, loader hook/export integration is not verified.
+          Do not use together with prior crashing shader mods.
+          '@ | Set-Content dist/Observer/README.txt -Encoding utf8
+          Compress-Archive -Path dist/Observer/* -DestinationPath dist/XHD_D3D11_Observer_Mod.zip -Force
+          if(!(Test-Path dist/XHD_D3D11_Observer_Mod.zip)) {throw 'Package missing'}
       - uses: actions/upload-artifact@v4
         with:
-          name: XHD-D3D11-Observer-DLL-Unverified-InGame
-          path: xhd-injector/build/Release/XHDEyeInjector.dll
+          name: XHD-D3D11-Observer-Mod-Experimental
+          path: |
+            dist/XHD_D3D11_Observer_Mod.zip
+            xhd-injector/build/Release/XHDEyeInjector.dll
           if-no-files-found: error
