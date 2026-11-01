@@ -48,6 +48,8 @@ jobs:
             $asm=Get-Content $file -Raw
             if($asm -notmatch 'dcl_output.*o1') {throw "No MRT1 output in $file"}
           }
+      - name: Audit PC texture resource collisions (expected blocker)
+        run: python xhd-injector/shader-test/audit_binding_collision.py
       - uses: actions/upload-artifact@v4
         with:
           name: XHD-PS4-sampling-compile-proof
@@ -57,6 +59,7 @@ jobs:
             draw144.asm
             draw220.asm
             abi_audit.json
+            binding_audit.json
             integrated144.cso
             integrated220.cso
             integrated144.asm
