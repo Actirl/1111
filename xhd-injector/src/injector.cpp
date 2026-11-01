@@ -32,6 +32,60 @@ static void writeLog(const char* message){
  FILE* f=nullptr;
  if(_wfopen_s(&f,logfile,L"a")==0&&f){fputs(message,f);fputc('\n',f);fclose(f);}
 }
+
+static wchar_t textureBase[MAX_PATH]=L"";
+static bool saveTexture(ID3D11DeviceContext* ctx, ID3D11ShaderResourceView* view, unsigned slot){
+ if(!view || !textureBase[0])return false;
+ D3D11_SHADER_RESOURCE_VIEW_DESC vd={};view->GetDesc(&vd);
+ if(vd.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2D)return false;
+ ID3D11Resource* resource=nullptr;view->GetResource(&resource);
+ if(!resource)return false;
+ ID3D11Texture2D* texture=nullptr;
+ HRESULT hr=resource->QueryInterface(__uuidof(ID3D11Texture2D),(void**)&texture);
+ resource->Release();if(FAILED(hr)||!texture)return false;
+ D3D11_TEXTURE2D_DESC td={};texture->GetDesc(&td);
+ if(td.SampleDesc.Count!=1 || td.Width>4096 || td.Height>4096){texture->Release();return false;}
+ UINT mip=vd.Texture2D.MostDetailedMip;
+ if(mip>=td.MipLevels){texture->Release();return false;}
+ D3D11_TEXTURE2D_DESC stage=td;
+ stage.Width=std::max(1u,td.Width>>mip);stage.Height=std::max(1u,td.Height>>mip);
+ stage.MipLevels=1;stage.ArraySize=1;
+ stage.Usage=D3D11_USAGE_STAGING;stage.BindFlags=0;stage.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+ stage.MiscFlags=0;
+ ID3D11Device* device=nullptr;ctx->GetDevice(&device);
+ if(!device){texture->Release();return false;}
+ ID3D11Texture2D* staging=nullptr;
+ hr=device->CreateTexture2D(&stage,nullptr,&staging);
+ device->Release();
+ if(FAILED(hr)||!staging){texture->Release();return false;}
+ UINT sub=D3D11CalcSubresource(mip,0,td.MipLevels);
+ ctx->CopySubresourceRegion(staging,0,0,0,0,texture,sub,nullptr);
+ texture->Release();
+ D3D11_MAPPED_SUBRESOURCE map={};
+ hr=ctx->Map(staging,0,D3D11_MAP_READ,0,&map);
+ if(FAILED(hr)){staging->Release();return false;}
+ wchar_t dest[MAX_PATH]={};swprintf_s(dest,L"%ls_t%u.raw",textureBase,slot);
+ FILE* output=nullptr;bool ok=false;
+ if(_wfopen_s(&output,dest,L"wb")==0 && output){
+   // Raw GPU rows including RowPitch padding; descriptor and row stride are written to log.
+   UINT rows=(stage.Format==DXGI_FORMAT_BC1_UNORM||stage.Format==DXGI_FORMAT_BC1_UNORM_SRGB||
+     stage.Format==DXGI_FORMAT_BC2_UNORM||stage.Format==DXGI_FORMAT_BC2_UNORM_SRGB||
+     stage.Format==DXGI_FORMAT_BC3_UNORM||stage.Format==DXGI_FORMAT_BC3_UNORM_SRGB||
+     stage.Format==DXGI_FORMAT_BC4_UNORM||stage.Format==DXGI_FORMAT_BC4_SNORM||
+     stage.Format==DXGI_FORMAT_BC5_UNORM||stage.Format==DXGI_FORMAT_BC5_SNORM||
+     stage.Format==DXGI_FORMAT_BC6H_UF16||stage.Format==DXGI_FORMAT_BC6H_SF16||
+     stage.Format==DXGI_FORMAT_BC7_UNORM||stage.Format==DXGI_FORMAT_BC7_UNORM_SRGB)?
+       std::max(1u,(stage.Height+3)/4):stage.Height;
+   size_t bytes=size_t(map.RowPitch)*rows;
+   ok=fwrite(map.pData,1,bytes,output)==bytes;
+   fclose(output);
+   char msg[200];sprintf_s(msg,"texture capture t%u %ux%u format=%u mip=%u rowpitch=%u rows=%u bytes=%zu saved=%u",
+      slot,stage.Width,stage.Height,(unsigned)stage.Format,mip,map.RowPitch,rows,bytes,ok?1:0);
+   writeLog(msg);
+ }
+ ctx->Unmap(staging,0);staging->Release();return ok;
+}
+
 static void captureBindings(ID3D11DeviceContext* context){
  if(bindingsCaptured.load(std::memory_order_acquire))return;
  ID3D11PixelShader* current=nullptr;
@@ -66,6 +120,7 @@ static void captureBindings(ID3D11DeviceContext* context){
    }
    resource->Release();
   }
+  if(i==0||i==2||i==3)saveTexture(context,views[i],i);
   views[i]->Release();
  }
  ID3D11SamplerState* samplers[16]={};
@@ -95,7 +150,7 @@ static void setup(){
  reinterpret_cast<LPCWSTR>(&setup),&module)){
  if(GetModuleFileNameW(module,path,MAX_PATH)){
  wchar_t* slash=wcsrchr(path,L'\\');
- if(slash){slash[1]=0;swprintf_s(logfile,L"%ls%ls",path,L"xhd_shader_observer.log");swprintf_s(originalShaderFile,L"%ls%ls",path,L"xhd_target_original_runtime.cso");}
+ if(slash){slash[1]=0;swprintf_s(logfile,L"%ls%ls",path,L"xhd_shader_observer.log");swprintf_s(originalShaderFile,L"%ls%ls",path,L"xhd_target_original_runtime.cso");swprintf_s(textureBase,L"%ls%ls",path,L"xhd_eye_capture");}
  }
  }
  wchar_t ini[MAX_PATH]={0}, shader[MAX_PATH]={0};
