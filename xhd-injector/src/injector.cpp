@@ -8,11 +8,17 @@
 #include <vector>
 #include <mutex>
 #include <string>
+#include <algorithm>
 #include "MinHook.h"
 
 using CreatePS = HRESULT (STDMETHODCALLTYPE *)(ID3D11Device*,const void*,SIZE_T,ID3D11ClassLinkage*,ID3D11PixelShader**);
 static CreatePS original = nullptr;
 static std::mutex hookMutex;
+static std::mutex shaderMutex;
+static std::vector<ID3D11PixelShader*> activeTargets;
+static std::atomic<bool> bindingsCaptured{false};
+using DrawIndexedFn=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT,INT);
+static DrawIndexedFn originalDrawIndexed=nullptr;
 static std::atomic<unsigned long> created{0},hits{0},frames{0};
 static std::atomic<bool> enabled{false};
 static std::atomic<unsigned long> replaced{0}, failed{0};
@@ -25,6 +31,62 @@ static const unsigned char target[16]={0xCE,0x32,0x29,0x95,0x46,0x83,0x9F,0x38,0
 static void writeLog(const char* message){
  FILE* f=nullptr;
  if(_wfopen_s(&f,logfile,L"a")==0&&f){fputs(message,f);fputc('\n',f);fclose(f);}
+}
+static void captureBindings(ID3D11DeviceContext* context){
+ if(bindingsCaptured.load(std::memory_order_acquire))return;
+ ID3D11PixelShader* current=nullptr;
+ context->PSGetShader(&current,nullptr,nullptr);
+ if(!current)return;
+ bool matched=false;
+ {
+  std::lock_guard<std::mutex> lock(shaderMutex);
+  matched=std::find(activeTargets.begin(),activeTargets.end(),current)!=activeTargets.end();
+ }
+ current->Release();
+ if(!matched)return;
+ bool expected=false;
+ if(!bindingsCaptured.compare_exchange_strong(expected,true))return;
+ writeLog("First matched draw: capturing bound pixel-shader resources");
+ ID3D11ShaderResourceView* views[32]={};
+ context->PSGetShaderResources(0,32,views);
+ for(unsigned i=0;i<32;i++){
+  if(!views[i])continue;
+  D3D11_SHADER_RESOURCE_VIEW_DESC d={};views[i]->GetDesc(&d);
+  char line[160];sprintf_s(line,"PS SRV t%u dimension=%u format=%u",i,(unsigned)d.ViewDimension,(unsigned)d.Format);
+  writeLog(line);
+  ID3D11Resource* resource=nullptr;views[i]->GetResource(&resource);
+  if(resource){
+   D3D11_RESOURCE_DIMENSION kind=D3D11_RESOURCE_DIMENSION_UNKNOWN;resource->GetType(&kind);
+   if(kind==D3D11_RESOURCE_DIMENSION_TEXTURE2D){
+    ID3D11Texture2D* tex=nullptr;
+    if(SUCCEEDED(resource->QueryInterface(__uuidof(ID3D11Texture2D),(void**)&tex))){
+     D3D11_TEXTURE2D_DESC td={};tex->GetDesc(&td);
+     sprintf_s(line,"PS SRV t%u texture2D %ux%u array=%u mips=%u format=%u",i,td.Width,td.Height,td.ArraySize,td.MipLevels,(unsigned)td.Format);writeLog(line);tex->Release();
+    }
+   }
+   resource->Release();
+  }
+  views[i]->Release();
+ }
+ ID3D11SamplerState* samplers[16]={};
+ context->PSGetSamplers(0,16,samplers);
+ for(unsigned i=0;i<16;i++)if(samplers[i]){
+  D3D11_SAMPLER_DESC d={};samplers[i]->GetDesc(&d);
+  char line[160];sprintf_s(line,"PS sampler s%u filter=%u addressU=%u addressV=%u",i,(unsigned)d.Filter,(unsigned)d.AddressU,(unsigned)d.AddressV);
+  writeLog(line);samplers[i]->Release();
+ }
+ ID3D11Buffer* buffers[8]={};
+ context->PSGetConstantBuffers(0,8,buffers);
+ for(unsigned i=0;i<8;i++)if(buffers[i]){
+  D3D11_BUFFER_DESC d={};buffers[i]->GetDesc(&d);
+  char line[160];sprintf_s(line,"PS CB b%u bytes=%u usage=%u",i,d.ByteWidth,(unsigned)d.Usage);
+  writeLog(line);buffers[i]->Release();
+ }
+ writeLog("First matched draw: resource descriptor capture completed");
+}
+static void STDMETHODCALLTYPE observeDrawIndexed(ID3D11DeviceContext* context,UINT count,UINT start,INT base){
+ captureBindings(context);
+ originalDrawIndexed(context,count,start,base);
 }
 static void setup(){
  HMODULE module=nullptr;
@@ -68,7 +130,7 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
    if(replacementOn&&!replacement.empty()&&out){
      ID3D11PixelShader* candidate=nullptr;
      HRESULT status=original(dev,replacement.data(),replacement.size(),link,&candidate);
-     if(SUCCEEDED(status)&&candidate){*out=candidate;replaced.fetch_add(1);return status;}
+     if(SUCCEEDED(status)&&candidate){*out=candidate;{std::lock_guard<std::mutex> lock(shaderMutex);activeTargets.push_back(candidate);}replaced.fetch_add(1);return status;}
      if(candidate)candidate->Release();
      failed.fetch_add(1);
    }
@@ -78,7 +140,7 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
 extern "C" __declspec(dllexport) void PreInit(){static std::once_flag once;std::call_once(once,setup);}
 extern "C" __declspec(dllexport) void Init(){PreInit();}
 extern "C" __declspec(dllexport) void PostInit(){writeLog("PostInit called");}
-extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,ID3D11DeviceContext*){
+extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,ID3D11DeviceContext* context){
  Init();
  if(!dev){writeLog("D3DInit: device null");return;}
  std::lock_guard<std::mutex> lock(hookMutex);
@@ -89,6 +151,12 @@ extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,
  if(MH_CreateHook(addr,(void*)&observe,(void**)&original)!=MH_OK){writeLog("MH_CreateHook failed");return;}
  if(MH_EnableHook(addr)!=MH_OK){MH_RemoveHook(addr);original=nullptr;writeLog("MH_EnableHook failed");return;}
  enabled=true;writeLog("CreatePixelShader observer hook enabled");
+ if(context){
+   void* draw=(*reinterpret_cast<void***>(context))[12];
+   MH_STATUS ds=MH_CreateHook(draw,(void*)&observeDrawIndexed,(void**)&originalDrawIndexed);
+   if(ds==MH_OK && MH_EnableHook(draw)==MH_OK)writeLog("DrawIndexed resource snapshot hook enabled");
+   else writeLog("DrawIndexed hook failed; shader replacement remains enabled");
+ }
 }
 extern "C" __declspec(dllexport) void OnFrame(IDXGISwapChain*){
  PreInit();
