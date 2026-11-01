@@ -15,9 +15,9 @@ for dtype,name,slot in re.findall(r"(?m)^\s*(Texture\w+)<float4>\s+(\w+)\s*:\s*r
                    "is_ps4_binding_proven":False})
 mismatches=[v for v in claims if v["type_compatible"] is False]
 report={"game_ready":False,"ps4_resources_mapped":False,"mismatches":mismatches,
- "claims":claims,"reason":"Test fixture expects array textures in PC slots holding Texture2D; PS4 originals not yet acquired."}
+ "claims":claims,"reason":"Diagnostic slots t24-t27 are absent from one observed draw, but runtime availability and real PS4 textures are not proven."}
 Path("binding_audit.json").write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding="utf8")
 for c in claims:print(c)
 print("BLOCKING MISMATCHES:",len(mismatches))
-assert len(mismatches)>=2,"unexpected fixture bindings; manually re-audit"
-print("EXPECTED BLOCKER VERIFIED. Do not ship integrated .cso as a game replacement.")
+assert len(mismatches)==0,"Fixture still conflicts with observed PC resource dimensions"
+print("No direct type collision in observed PC slots. Runtime ownership and PS4 resources UNVERIFIED; not game-ready.")
