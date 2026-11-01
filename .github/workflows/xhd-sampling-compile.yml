@@ -28,9 +28,21 @@ jobs:
         run: |
           & $env:FXC /nologo /T ps_5_0 /E PSMain220 /I xhd-injector/shader-test /Fo draw220.cso xhd-injector/shader-test/shader_compile_test.hlsl
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Disassemble and audit output ABI
+        shell: pwsh
+        run: |
+          & $env:FXC /nologo /T ps_5_0 /E PSMain144 /Fc draw144.asm xhd-injector/shader-test/shader_compile_test.hlsl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $env:FXC /nologo /T ps_5_0 /E PSMain220 /Fc draw220.asm xhd-injector/shader-test/shader_compile_test.hlsl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python xhd-injector/shader-test/audit_abi.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: XHD-PS4-sampling-compile-proof
           path: |
             draw144.cso
             draw220.cso
+            draw144.asm
+            draw220.asm
+            abi_audit.json
