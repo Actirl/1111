@@ -37,6 +37,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python xhd-injector/shader-test/audit_abi.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile combined PS4 samples plus PC RT1 fixture
+        shell: pwsh
+        run: |
+          & $env:FXC /nologo /T ps_5_0 /E Integrated144 /Fo integrated144.cso /Fc integrated144.asm xhd-injector/shader-test/xhd_integrated_fixture.hlsl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $env:FXC /nologo /T ps_5_0 /E Integrated220 /Fo integrated220.cso /Fc integrated220.asm xhd-injector/shader-test/xhd_integrated_fixture.hlsl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach($file in @('integrated144.asm','integrated220.asm')) {
+            $asm=Get-Content $file -Raw
+            if($asm -notmatch 'dcl_output.*o1') {throw "No MRT1 output in $file"}
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: XHD-PS4-sampling-compile-proof
@@ -46,3 +57,7 @@ jobs:
             draw144.asm
             draw220.asm
             abi_audit.json
+            integrated144.cso
+            integrated220.cso
+            integrated144.asm
+            integrated220.asm
