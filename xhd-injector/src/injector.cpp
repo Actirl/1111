@@ -38,7 +38,9 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
    hits.fetch_add(1,std::memory_order_relaxed);
  return original(dev,data,len,link,out);
 }
-extern "C" __declspec(dllexport) void Init(){static std::once_flag once;std::call_once(once,setup);}
+extern "C" __declspec(dllexport) void PreInit(){static std::once_flag once;std::call_once(once,setup);writeLog("PreInit called");}
+extern "C" __declspec(dllexport) void Init(){PreInit();writeLog("Init called");}
+extern "C" __declspec(dllexport) void PostInit(){writeLog("PostInit called");}
 extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,ID3D11DeviceContext*){
  Init();
  if(!dev){writeLog("D3DInit: device null");return;}
