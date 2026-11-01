@@ -27,9 +27,9 @@ static void writeLog(const char* message){
 }
 static void setup(){
  HMODULE module=nullptr;
+ wchar_t path[MAX_PATH]={0};
  if(GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
  reinterpret_cast<LPCWSTR>(&setup),&module)){
- wchar_t path[MAX_PATH]={0};
  if(GetModuleFileNameW(module,path,MAX_PATH)){
  wchar_t* slash=wcsrchr(path,L'\\');
  if(slash){slash[1]=0;swprintf_s(logfile,L"%ls%ls",path,L"xhd_shader_observer.log");}
