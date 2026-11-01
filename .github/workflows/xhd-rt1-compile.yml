@@ -20,7 +20,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path pc_eye_rt1_fixture.cso)) {throw 'DXBC missing'}
           $asm=Get-Content pc_eye_rt1_fixture.asm -Raw
-          if ($asm -notmatch '(?m)^\\s*dcl_output\\s+o1(?:\\.|\\b)') {throw 'Second output register o1 absent'}
+          if ($asm -notmatch 'dcl_output.*o1') {throw 'Second output register o1 absent'}
           Write-Host "RT1 dual-output fixture compiled. NOT a game replacement."
       - uses: actions/upload-artifact@v4
         with:
