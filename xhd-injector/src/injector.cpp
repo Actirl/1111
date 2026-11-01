@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <d3d11.h>
+#include <d3dcompiler.h>
 #include <dxgi.h>
 #include <atomic>
 #include <cstring>
@@ -27,6 +28,7 @@ static bool replacementOn=false;
 static std::atomic<bool> captured{false};
 static wchar_t originalShaderFile[MAX_PATH] = L"xhd_target_original_runtime.cso";
 static wchar_t logfile[MAX_PATH] = L"xhd_shader_observer.log";
+static wchar_t asmPath[MAX_PATH] = L"xhd_target_original_runtime.asm";
 static const unsigned char target[16]={0xCE,0x32,0x29,0x95,0x46,0x83,0x9F,0x38,0x1B,0x68,0xAC,0x0D,0x07,0x2F,0xC0,0x35};
 static void writeLog(const char* message){
  FILE* f=nullptr;
@@ -143,6 +145,24 @@ static void STDMETHODCALLTYPE observeDrawIndexed(ID3D11DeviceContext* context,UI
  captureBindings(context);
  originalDrawIndexed(context,count,start,base);
 }
+static void disassembleOriginalShader(const void* data,SIZE_T len){
+ HMODULE compiler=LoadLibraryW(L"d3dcompiler_47.dll");
+ if(!compiler){writeLog("D3D disassembly skipped: compiler DLL unavailable");return;}
+ using Disasm=HRESULT (WINAPI*)(LPCVOID,SIZE_T,UINT,LPCSTR,ID3DBlob**);
+ auto fn=(Disasm)GetProcAddress(compiler,"D3DDisassemble");
+ ID3DBlob* blob=nullptr;
+ HRESULT hr=fn?fn(data,len,0,nullptr,&blob):E_FAIL;
+ if(SUCCEEDED(hr)&&blob){
+  FILE* out=nullptr;
+  if(_wfopen_s(&out,asmPath,L"wb")==0&&out){
+   size_t size=blob->GetBufferSize();size_t written=fwrite(blob->GetBufferPointer(),1,size,out);
+   fclose(out);
+   writeLog(written==size?"original Shader ASM disassembly saved":"Shader ASM write incomplete");
+  }else writeLog("original Shader ASM file open failed");
+  blob->Release();
+ }else writeLog("D3DDisassemble failed");
+ FreeLibrary(compiler);
+}
 static void setup(){
  HMODULE module=nullptr;
  wchar_t path[MAX_PATH]={0};
@@ -150,7 +170,7 @@ static void setup(){
  reinterpret_cast<LPCWSTR>(&setup),&module)){
  if(GetModuleFileNameW(module,path,MAX_PATH)){
  wchar_t* slash=wcsrchr(path,L'\\');
- if(slash){slash[1]=0;swprintf_s(logfile,L"%ls%ls",path,L"xhd_shader_observer.log");swprintf_s(originalShaderFile,L"%ls%ls",path,L"xhd_target_original_runtime.cso");swprintf_s(textureBase,L"%ls%ls",path,L"xhd_eye_capture");}
+ if(slash){slash[1]=0;swprintf_s(logfile,L"%ls%ls",path,L"xhd_shader_observer.log");swprintf_s(originalShaderFile,L"%ls%ls",path,L"xhd_target_original_runtime.cso");swprintf_s(asmPath,L"%ls%ls",path,L"xhd_target_original_runtime.asm");swprintf_s(textureBase,L"%ls%ls",path,L"xhd_eye_capture");}
  }
  }
  wchar_t ini[MAX_PATH]={0}, shader[MAX_PATH]={0};
@@ -177,6 +197,7 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
      if(_wfopen_s(&capture,originalShaderFile,L"wb")==0 && capture){
        size_t written=fwrite(data,1,len,capture);fclose(capture);
        writeLog(written==len?"captured original matching shader DXBC":"original DXBC capture incomplete");
+       if(written==len)disassembleOriginalShader(data,len);
      } else {
        captured.store(false);
        writeLog("original DXBC capture failed: file access");
