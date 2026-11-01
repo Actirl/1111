@@ -1,0 +1,36 @@
+name: XHD PS4 Sampling HLSL Compile
+on:
+  push:
+    branches: [xhd-injector-build-test]
+    paths:
+      - 'xhd-injector/shader-test/**'
+      - '.github/workflows/xhd-sampling-compile.yml'
+  workflow_dispatch:
+jobs:
+  compile:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate FXC
+        shell: pwsh
+        run: |
+          $fxc = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter fxc.exe -Recurse | Where-Object FullName -Match 'x64' | Select-Object -Last 1 -ExpandProperty FullName
+          if (-not $fxc) { throw 'fxc.exe not installed on Windows runner' }
+          "FXC=$fxc" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "FXC path: $fxc"
+      - name: Compile Draw144 PSMain144 ps_5_0
+        shell: pwsh
+        run: |
+          & $env:FXC /nologo /T ps_5_0 /E PSMain144 /I xhd-injector/shader-test /Fo draw144.cso xhd-injector/shader-test/shader_compile_test.hlsl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile Draw220 PSMain220 ps_5_0
+        shell: pwsh
+        run: |
+          & $env:FXC /nologo /T ps_5_0 /E PSMain220 /I xhd-injector/shader-test /Fo draw220.cso xhd-injector/shader-test/shader_compile_test.hlsl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-PS4-sampling-compile-proof
+          path: |
+            draw144.cso
+            draw220.cso
