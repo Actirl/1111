@@ -1,0 +1,28 @@
+name: XHD DLL Compile Proof
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/xhd-dll-proof.yml'
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S xhd-injector -B xhd-injector/build -A x64
+      - name: Compile DLL
+        run: cmake --build xhd-injector/build --config Release --parallel
+      - name: Verify artifact
+        shell: pwsh
+        run: |
+          $dll='xhd-injector/build/Release/XHDEyeInjector.dll'
+          if (!(Test-Path $dll)) { throw 'DLL missing' }
+          Get-Item $dll | Format-List Name,Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-Compile-Probe-DLL-Not-Injecting
+          path: xhd-injector/build/Release/XHDEyeInjector.dll
+          if-no-files-found: error
