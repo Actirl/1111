@@ -26,6 +26,9 @@ static std::atomic<unsigned long> replaced{0}, failed{0};
 static std::vector<unsigned char> replacement;
 static bool replacementOn=false;
 static bool neutralizeT3=false;
+static bool suppressIBL=false;
+static ID3D11ShaderResourceView* blackCube=nullptr;
+static std::atomic<unsigned long> iblDraws{0};
 static ID3D11ShaderResourceView* whiteT3=nullptr;
 static std::atomic<unsigned long> neutralizedDraws{0};
 static std::atomic<bool> captured{false};
@@ -146,7 +149,7 @@ static void captureBindings(ID3D11DeviceContext* context){
 }
 static void STDMETHODCALLTYPE observeDrawIndexed(ID3D11DeviceContext* context,UINT count,UINT start,INT base){
  captureBindings(context);
- if(neutralizeT3 && whiteT3){
+ if((neutralizeT3 && whiteT3)||(suppressIBL && blackCube)){
   ID3D11PixelShader* current=nullptr;context->PSGetShader(&current,nullptr,nullptr);
   bool matched=false;
   if(current){
@@ -156,12 +159,12 @@ static void STDMETHODCALLTYPE observeDrawIndexed(ID3D11DeviceContext* context,UI
   }
   if(matched){
    ID3D11ShaderResourceView* prior=nullptr;
-   context->PSGetShaderResources(3,1,&prior);
-   context->PSSetShaderResources(3,1,&whiteT3);
+   if(neutralizeT3){context->PSGetShaderResources(3,1,&prior);context->PSSetShaderResources(3,1,&whiteT3);}
+   ID3D11ShaderResourceView* originalIBL[2]={};
+   if(suppressIBL){context->PSGetShaderResources(10,2,originalIBL);ID3D11ShaderResourceView* black[2]={blackCube,blackCube};context->PSSetShaderResources(10,2,black);}
    originalDrawIndexed(context,count,start,base);
-   context->PSSetShaderResources(3,1,&prior);
-   if(prior)prior->Release();
-   neutralizedDraws.fetch_add(1);
+   if(neutralizeT3){context->PSSetShaderResources(3,1,&prior);if(prior)prior->Release();neutralizedDraws.fetch_add(1);}
+   if(suppressIBL){context->PSSetShaderResources(10,2,originalIBL);for(auto* p:originalIBL)if(p)p->Release();iblDraws.fetch_add(1);}
    return;
   }
  }
@@ -200,7 +203,9 @@ static void setup(){
  swprintf_s(shader,L"%ls%ls",path,L"replacement.cso");
  replacementOn=GetPrivateProfileIntW(L"settings",L"enable_replacement",0,ini)!=0;
  neutralizeT3=GetPrivateProfileIntW(L"settings",L"neutralize_t3",0,ini)!=0;
- if(neutralizeT3)replacementOn=false;
+ suppressIBL=GetPrivateProfileIntW(L"settings",L"suppress_ibl_t10_t11",0,ini)!=0;
+ if(neutralizeT3||suppressIBL)replacementOn=false;
+ if(suppressIBL)neutralizeT3=false;
  FILE* f=nullptr;
  if(_wfopen_s(&f,shader,L"rb")==0&&f){
    fseek(f,0,SEEK_END);long n=ftell(f);rewind(f);
@@ -236,7 +241,7 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
    }
  }
  HRESULT result=original(dev,data,len,link,out);
- if(neutralizeT3 && data && len>=36 && memcmp(data,"DXBC",4)==0 &&
+ if((neutralizeT3||suppressIBL) && data && len>=36 && memcmp(data,"DXBC",4)==0 &&
     memcmp((const unsigned char*)data+4,target,16)==0 && SUCCEEDED(result) && out && *out){
    std::lock_guard<std::mutex> lock(shaderMutex);activeTargets.push_back(*out);
  }
@@ -255,6 +260,20 @@ extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,
   ID3D11Texture2D* tex=nullptr;
   if(SUCCEEDED(dev->CreateTexture2D(&td,&initial,&tex))){
    if(SUCCEEDED(dev->CreateShaderResourceView(tex,nullptr,&whiteT3)))writeLog("t3 neutralization resource created");
+   tex->Release();
+  }
+ }
+ if(suppressIBL && !blackCube){
+  const unsigned char black[4]={0,0,0,255};
+  D3D11_TEXTURE2D_DESC td={};td.Width=1;td.Height=1;td.MipLevels=1;td.ArraySize=6;
+  td.Format=DXGI_FORMAT_R8G8B8A8_UNORM;td.SampleDesc.Count=1;
+  td.Usage=D3D11_USAGE_IMMUTABLE;td.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+  td.MiscFlags=D3D11_RESOURCE_MISC_TEXTURECUBE;
+  D3D11_SUBRESOURCE_DATA faces[6]={};
+  for(unsigned i=0;i<6;i++){faces[i].pSysMem=black;faces[i].SysMemPitch=4;}
+  ID3D11Texture2D* tex=nullptr;
+  if(SUCCEEDED(dev->CreateTexture2D(&td,faces,&tex))){
+   if(SUCCEEDED(dev->CreateShaderResourceView(tex,nullptr,&blackCube)))writeLog("black IBL cube created");
    tex->Release();
   }
  }
@@ -278,7 +297,7 @@ extern "C" __declspec(dllexport) void OnFrame(IDXGISwapChain*){
  const unsigned long frame=++frames;
  if(frame==1||frame%600==0){
  char buf[160];
- sprintf_s(buf,"frames=%lu hook=%d CreatePS=%lu target=%lu replaced=%lu fail=%lu t3neutral_draws=%lu",frame,enabled.load()?1:0,created.load(),hits.load(),replaced.load(),failed.load(),neutralizedDraws.load());
+ sprintf_s(buf,"frames=%lu hook=%d CreatePS=%lu target=%lu replaced=%lu fail=%lu t3neutral_draws=%lu ibl_draws=%lu",frame,enabled.load()?1:0,created.load(),hits.load(),replaced.load(),failed.load(),neutralizedDraws.load(),iblDraws.load());
  writeLog(buf);
  }
 }
