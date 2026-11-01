@@ -51,7 +51,7 @@ probe=''' ID3D11ShaderResourceView* hi[4]={};
 '''
 anchor='writeLog("First matched draw: capturing bound pixel-shader resources");'
 assert s.count(anchor)==1
-s=s.replace(anchor,anchor+'\\n'+probe.replace('\\n','\\n'))
+s=s.replace(anchor,anchor+chr(10)+probe)
 
 p.write_text(s,encoding="utf-8")
 print("Injected observer-only constant-buffer snapshot into temporary CI build")
