@@ -53,21 +53,9 @@ jobs:
       - name: Compile D3D11 slot guard separately
         shell: pwsh
         run: |
-          $vswhere="${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vs=& $vswhere -latest -products * -property installationPath
-          $msbuild=Join-Path $vs 'MSBuild\Current\Bin\amd64\MSBuild.exe'
-          if (!(Test-Path $msbuild)) { throw 'MSBuild not found' }
-          @'
-          <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
-            <ItemGroup><ClCompile Include="xhd-injector/shader-test/xhd_srv_slot_guard.cpp" /></ItemGroup>
-            <ItemDefinitionGroup><ClCompile><WarningLevel>Level3</WarningLevel><PreprocessorDefinitions>WIN32;_WINDOWS</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup>
-            <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props"/>
-            <PropertyGroup Label="Configuration"><ConfigurationType>StaticLibrary</ConfigurationType><PlatformToolset>v143</PlatformToolset></PropertyGroup>
-            <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props"/>
-            <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
-          </Project>
-          '@ | Set-Content slot_guard.vcxproj -Encoding ascii
-          & $msbuild slot_guard.vcxproj /p:Configuration=Release /p:Platform=x64 /v:minimal
+          cmake -S xhd-injector/shader-test/slot-guard -B xhd-injector/shader-test/slot-guard/build -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build xhd-injector/shader-test/slot-guard/build --config Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
