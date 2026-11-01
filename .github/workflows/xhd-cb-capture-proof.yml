@@ -1,0 +1,48 @@
+name: XHD Eye CB Capture Isolated Build
+on:
+  push:
+    branches: [xhd-injector-build-test]
+    paths:
+      - 'xhd-injector/shader-test/apply_cb_capture_ci.py'
+      - '.github/workflows/xhd-cb-capture-proof.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply observer-only capture patch in runner
+        run: python xhd-injector/shader-test/apply_cb_capture_ci.py
+      - name: Configure
+        run: cmake -S xhd-injector -B xhd-injector/build -A x64
+      - name: Compile DLL
+        run: cmake --build xhd-injector/build --config Release --parallel
+      - name: Package opt-in capture module
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force dist/XHDCBCapture | Out-Null
+          Copy-Item xhd-injector/build/Release/XHDEyeInjector.dll dist/XHDCBCapture/
+          "[settings]`nenable_replacement=0`nneutralize_t3=0`nsuppress_ibl_t10_t11=0`ncapture_eye_constants=1" | Set-Content dist/XHDCBCapture/xhd_injector.ini -Encoding ascii
+          @'
+          enabled = true
+          dll = ["XHDEyeInjector.dll"]
+          name = "XHD Eye CB Capture"
+          author = "XHD experiment"
+          version = "0.4"
+          '@ | Set-Content dist/XHDCBCapture/config.toml -Encoding utf8
+          @'
+          OBSERVER ONLY. Does not restore original PS4 XHD rendering.
+          Capture on the first matching original PC eye shader DrawIndexed.
+          Log: xhd_shader_observer.log
+          Files: xhd_eye_constants_b0.bin, b1.bin, b2.bin, b4.bin when bound.
+          Disable previous eye injector MODs to avoid duplicate hooks.
+          '@ | Set-Content dist/XHDCBCapture/README.txt -Encoding utf8
+          Compress-Archive dist/XHDCBCapture/* dist/XHD_Eye_CB_Capture.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-Eye-CB-Capture-Observer
+          path: dist/XHD_Eye_CB_Capture.zip
+          if-no-files-found: error
