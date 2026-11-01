@@ -48,7 +48,7 @@ static bool saveTexture(ID3D11DeviceContext* ctx, ID3D11ShaderResourceView* view
  UINT mip=vd.Texture2D.MostDetailedMip;
  if(mip>=td.MipLevels){texture->Release();return false;}
  D3D11_TEXTURE2D_DESC stage=td;
- stage.Width=std::max(1u,td.Width>>mip);stage.Height=std::max(1u,td.Height>>mip);
+ stage.Width=(std::max)(1u,td.Width>>mip);stage.Height=(std::max)(1u,td.Height>>mip);
  stage.MipLevels=1;stage.ArraySize=1;
  stage.Usage=D3D11_USAGE_STAGING;stage.BindFlags=0;stage.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
  stage.MiscFlags=0;
@@ -75,7 +75,7 @@ static bool saveTexture(ID3D11DeviceContext* ctx, ID3D11ShaderResourceView* view
      stage.Format==DXGI_FORMAT_BC5_UNORM||stage.Format==DXGI_FORMAT_BC5_SNORM||
      stage.Format==DXGI_FORMAT_BC6H_UF16||stage.Format==DXGI_FORMAT_BC6H_SF16||
      stage.Format==DXGI_FORMAT_BC7_UNORM||stage.Format==DXGI_FORMAT_BC7_UNORM_SRGB)?
-       std::max(1u,(stage.Height+3)/4):stage.Height;
+       (std::max)(1u,(stage.Height+3)/4):stage.Height;
    size_t bytes=size_t(map.RowPitch)*rows;
    ok=fwrite(map.pData,1,bytes,output)==bytes;
    fclose(output);
