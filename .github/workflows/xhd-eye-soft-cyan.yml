@@ -1,0 +1,46 @@
+name: XHD Eye Soft Cyan Shader Experiment
+on:
+  push:
+    branches: [xhd-injector-build-test]
+    paths:
+      - '.github/workflows/xhd-eye-soft-cyan.yml'
+      - 'xhd-injector/shader-test/xhd_eye_soft_cyan_v1.hlsl'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure injector
+        run: cmake -S xhd-injector -B xhd-injector/build -A x64
+      - name: Compile injector DLL
+        run: cmake --build xhd-injector/build --config Release --parallel
+      - name: Compile experimental HLSL and package MOD
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fxc = (Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter fxc.exe -Recurse -ErrorAction SilentlyContinue | Where-Object FullName -Match 'x64' | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          if (!$fxc) { throw 'fxc.exe not found' }
+          $dir = 'dist/XHD_Eye_Soft_Cyan_v1'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          & $fxc /nologo /T ps_5_0 /E Main /Fo "$dir/replacement.cso" 'xhd-injector/shader-test/xhd_eye_soft_cyan_v1.hlsl'
+          if ($LASTEXITCODE -ne 0) { throw 'HLSL compile failed' }
+          Copy-Item 'xhd-injector/build/Release/XHDEyeInjector.dll' "$dir/XHDEyeInjector.dll"
+          @('[settings]','enable_replacement=1','neutralize_t3=0','suppress_ibl_t10_t11=0') | Set-Content "$dir/xhd_injector.ini" -Encoding ascii
+          @('enabled = true','dll = ["XHDEyeInjector.dll"]','name = "XHD Eye Soft Cyan Experiment"','author = "Shader test"','version = "0.6"') | Set-Content "$dir/config.toml" -Encoding utf8
+          @(
+            'Experimental NON-MAGENTA blue/cyan eye pixel shader.'
+            'Original t0 iris sample; highlight compression; RT1 approximated for one captured draw.'
+            'NOT original PS4 X HD shader. May break other scenes/eye masks. No in-game validation yet.'
+            'Disable all other XHD injector mods. Install only this MOD; restart game.'
+            'Check xhd_shader_observer.log for replaced greater than 0.'
+            'If eyes or game look wrong, remove mod folder.'
+          ) | Set-Content "$dir/README.txt" -Encoding utf8
+          Compress-Archive -Path "$dir/*" -DestinationPath 'dist/XHD_Eye_Soft_Cyan_v1.zip' -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-Eye-Soft-Cyan-v1
+          path: dist/XHD_Eye_Soft_Cyan_v1.zip
+          if-no-files-found: error
