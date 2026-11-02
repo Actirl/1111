@@ -1,5 +1,5 @@
 // XHD-Look: scene lighting + real PC IBL sampling, EXPERIMENTAL / NON-SHIPPING.
-// Implements the captured PC shadow sampling equation, but not its branch predicate.
+// Implements PC shadow sampling and a subset of NPR diffuse-IBL gating.\n// Remaining shader state branches and cb4 tonemapping still unverified.
 // NOT XHD PS4 lighting. Do not install until verified.
 #include "xhd_pc_aux_mrt.hlsli"
 #include "xhd_pc_lighting_kernels.hlsli"
@@ -19,6 +19,7 @@ SamplerState ShadowS:register(s7);
 cbuffer ShaderState:register(b0) { uint4 shaderState; };
 cbuffer Scene:register(b1) { float4 sceneRegisters[78]; };
 cbuffer Batch:register(b2) { float4 batchRegisters[51]; };
+cbuffer NPRParam:register(b4) { float4 nprRegisters[14]; };
 cbuffer XHDControl:register(b12) {
  uint4 Flags; float4 Eye; float4 Skin; float4 Hair; float4 Cloth;
 };
@@ -61,6 +62,10 @@ Output Main(Input i) {
    dot(sceneRegisters[42].xyz,N),
    dot(sceneRegisters[43].xyz,N),
    dot(sceneRegisters[44].xyz,N)));
+ // PC DXBC uses cb2[50].x bit 15 to select cb4[5].z/.w,
+ // then checks whether the resulting diffuse-IBL gain is positive.
+ bool nprSwitch=((asuint(batchRegisters[50].x)>>15)&1u)!=0u;
+ float diffuseGain=nprSwitch?nprRegisters[5].z:nprRegisters[5].w;
  float3 diffuseLod0=IBLLow.SampleLevel(S9,diffuseDirection,0).rgb;
  float3 diffuseLod1=IBLLow.SampleLevel(S9,diffuseDirection,1).rgb;
  // Original PC shadow draw uses v6.xy / v6.z, t19+s7 and cb1[45].x*cb2[30].w.
@@ -68,7 +73,7 @@ Output Main(Input i) {
  float depth=ShadowDepth.Sample(ShadowS,i.shadowProject.xy).x;
  float shadowFactor=XHDPCShadow(depth,i.shadowProject.z,sceneRegisters[45].x,
                                batchRegisters[30].w,L,N);
- float3 diffuseIBL=XHDPCDiffuseIBLBlend(diffuseLod0,diffuseLod1,shadowFactor);
+ float3 diffuseIBL=diffuseGain>0.0?XHDPCDiffuseIBLBlend(diffuseLod0,diffuseLod1,shadowFactor):float3(1,1,1);
  float3 sharpIBL=IBLSharp.Sample(S10,iblDirection).rgb;
  float3 roughIBL=IBLRough.Sample(S10,iblDirection).rgb;
  float3 specIBL=XHDPCSpecularIBLBlend(roughIBL,sharpIBL,saturate(batchRegisters[31].x));
