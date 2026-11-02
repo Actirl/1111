@@ -12,6 +12,27 @@ on:
 permissions:
   contents: read
 jobs:
+  shader-preflight:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile actual first-prototype replacement CSO independently
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Path shader-dist -Force | Out-Null
+          $fxc=Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter fxc.exe -Recurse -ErrorAction SilentlyContinue | Where-Object FullName -Match 'x64' | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          if (!$fxc) { throw 'fxc.exe not installed' }
+          & $fxc /nologo /T ps_5_0 /E Main /I 'xhd-injector/shader-test' /Fo 'shader-dist/replacement.cso' 'xhd-injector/shader-test/xhdlook_scene_ibl_probe.hlsl'
+          if ($LASTEXITCODE -ne 0) { throw 'First prototype HLSL compile failed' }
+          python xhd-injector/tools/check_scene_aux.py 'shader-dist/replacement.cso' --ibl --shadow
+          if ($LASTEXITCODE -ne 0) { throw 'First prototype shader ABI check failed' }
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: XHDLook-First-Shader-CSO
+          path: shader-dist/replacement.cso
+          if-no-files-found: error
   build:
     runs-on: windows-2022
     steps:
