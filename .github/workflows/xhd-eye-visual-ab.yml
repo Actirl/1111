@@ -32,23 +32,22 @@ jobs:
             } else {
               "[settings]`nenable_replacement=0`nneutralize_t3=0`nsuppress_ibl_t10_t11=1" | Set-Content "$dir/xhd_injector.ini" -Encoding ascii
             }
-            @"
-          enabled = true
-          dll = ["XHDEyeInjector.dll"]
-          name = "XHD Eye $mode Visual Test"
-          author = "XHD shader experiment"
-          version = "0.5"
-          "@ | Set-Content "$dir/config.toml" -Encoding utf8
-            @"
-          VISUAL EXPERIMENT: This is NOT the original PS4 X HD shader or full restoration.
-          A_T3_White: substitute a solid white material texture for original eye t3 on matched draws.
-          B_IBL_Black: substitute black cube textures for eye IBL t10 and t11 on matched draws.
-          Install ONLY ONE variant at a time via DivaModLoader / DivaModManager.
-          Disable all older XHD eye injector mods before testing.
-          Compare same scene against disabled mod. Restart the game when changing variants.
-          Check xhd_shader_observer.log for t3neutral_draws>0 or ibl_draws>0.
-          If rendering is broken or game crashes, remove this mod folder.
-          "@ | Set-Content "$dir/README.txt" -Encoding utf8
+            @(
+              'enabled = true'
+              'dll = ["XHDEyeInjector.dll"]'
+              "name = 'XHD Eye $mode Visual Test'"
+              'author = "XHD shader experiment"'
+              'version = "0.5"'
+            ) | Set-Content "$dir/config.toml" -Encoding utf8
+            @(
+              'VISUAL EXPERIMENT: Not original PS4 X HD restoration.'
+              'A_T3_White changes t3 eye material texture to white.'
+              'B_IBL_Black changes t10 and t11 eye environment cubes to black.'
+              'Install ONE variant at a time. Disable any old XHD eye injector mod.'
+              'Compare matching scenes. Restart game to switch variants.'
+              'Check xhd_shader_observer.log: t3neutral_draws or ibl_draws should rise.'
+              'Remove the mod folder if game crashes or renders incorrectly.'
+            ) | Set-Content "$dir/README.txt" -Encoding utf8
             Compress-Archive -Path "$dir/*" -DestinationPath "dist/XHD_Eye_$mode.zip" -Force
           }
       - uses: actions/upload-artifact@v4
