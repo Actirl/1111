@@ -1,0 +1,60 @@
+name: XHD Eye Visual A-B Test Mods
+on:
+  push:
+    branches: [xhd-injector-build-test]
+    paths:
+      - '.github/workflows/xhd-eye-visual-ab.yml'
+      - 'xhd-injector/src/injector.cpp'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  visual-ab:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S xhd-injector -B xhd-injector/build -A x64
+      - name: Compile independent DLL
+        run: cmake --build xhd-injector/build --config Release --parallel
+      - name: Package two visible tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dll = 'xhd-injector/build/Release/XHDEyeInjector.dll'
+          if (!(Test-Path $dll)) { throw 'Missing DLL' }
+          foreach ($mode in @('A_T3_White', 'B_IBL_Black')) {
+            $dir = "dist/$mode"
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Copy-Item $dll "$dir/XHDEyeInjector.dll"
+            if ($mode -eq 'A_T3_White') {
+              "[settings]`nenable_replacement=0`nneutralize_t3=1`nsuppress_ibl_t10_t11=0" | Set-Content "$dir/xhd_injector.ini" -Encoding ascii
+            } else {
+              "[settings]`nenable_replacement=0`nneutralize_t3=0`nsuppress_ibl_t10_t11=1" | Set-Content "$dir/xhd_injector.ini" -Encoding ascii
+            }
+            @"
+          enabled = true
+          dll = ["XHDEyeInjector.dll"]
+          name = "XHD Eye $mode Visual Test"
+          author = "XHD shader experiment"
+          version = "0.5"
+          "@ | Set-Content "$dir/config.toml" -Encoding utf8
+            @"
+          VISUAL EXPERIMENT: This is NOT the original PS4 X HD shader or full restoration.
+          A_T3_White: substitute a solid white material texture for original eye t3 on matched draws.
+          B_IBL_Black: substitute black cube textures for eye IBL t10 and t11 on matched draws.
+          Install ONLY ONE variant at a time via DivaModLoader / DivaModManager.
+          Disable all older XHD eye injector mods before testing.
+          Compare same scene against disabled mod. Restart the game when changing variants.
+          Check xhd_shader_observer.log for t3neutral_draws>0 or ibl_draws>0.
+          If rendering is broken or game crashes, remove this mod folder.
+          "@ | Set-Content "$dir/README.txt" -Encoding utf8
+            Compress-Archive -Path "$dir/*" -DestinationPath "dist/XHD_Eye_$mode.zip" -Force
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-Eye-Visual-AB-Test-Mods
+          path: |
+            dist/XHD_Eye_A_T3_White.zip
+            dist/XHD_Eye_B_IBL_Black.zip
+          if-no-files-found: error
