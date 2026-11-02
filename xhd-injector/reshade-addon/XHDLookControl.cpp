@@ -46,11 +46,14 @@ void update(const Parameters& p) {
 void overlay(reshade::api::effect_runtime*) {
  if (!shared) { ImGui::TextUnformatted("XHDLook: shared parameters unavailable"); return; }
  ImGui::TextUnformatted("XHD-Look Renderer - GPU parameter bridge");
- ImGui::TextUnformatted("Eye mode experimental. Skin/hair/clothes are reserved.");
+ ImGui::TextUnformatted("WARNING: This is a diagnostic replacement shader, NOT XHD fidelity.");
+ ImGui::TextUnformatted("Unchecking does not restore the original game shader.");
+ ImGui::TextUnformatted("Disable replacement in xhd_injector.ini and restart for A/B.");
+ ImGui::TextUnformatted("Skin/hair/clothes currently have no effect on GPU.");
  Parameters p=*shared;
  bool changed=false;
  bool active=p.enabled!=0;
- if(ImGui::Checkbox("Enable XHD-Look eye shader parameters",&active)) {p.enabled=active?1u:0u;changed=true;}
+ if(ImGui::Checkbox("Enable experimental eye parameter variation",&active)) {p.enabled=active?1u:0u;changed=true;}
  ImGui::Combo("Material preview",&selected,labels,4);
  Material* m=selected==0?&p.eye:selected==1?&p.skin:selected==2?&p.hair:&p.clothes;
  changed|=ImGui::SliderFloat("Ambient", &m->ambient,0,1);
