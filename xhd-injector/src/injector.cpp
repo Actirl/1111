@@ -31,6 +31,7 @@ static ID3D11ShaderResourceView* blackCube=nullptr;
 static std::atomic<unsigned long> iblDraws{0};
 static ID3D11ShaderResourceView* whiteT3=nullptr;
 static std::atomic<unsigned long> neutralizedDraws{0};
+static std::atomic<bool> visualWriteConfirmed{false};
 static std::atomic<bool> captured{false};
 static wchar_t originalShaderFile[MAX_PATH] = L"xhd_target_original_runtime.cso";
 static wchar_t logfile[MAX_PATH] = L"xhd_shader_observer.log";
@@ -162,6 +163,21 @@ static void STDMETHODCALLTYPE observeDrawIndexed(ID3D11DeviceContext* context,UI
    if(neutralizeT3){context->PSGetShaderResources(3,1,&prior);context->PSSetShaderResources(3,1,&whiteT3);}
    ID3D11ShaderResourceView* originalIBL[2]={};
    if(suppressIBL){context->PSGetShaderResources(10,2,originalIBL);ID3D11ShaderResourceView* black[2]={blackCube,blackCube};context->PSSetShaderResources(10,2,black);}
+   if(!visualWriteConfirmed.exchange(true)){
+     ID3D11ShaderResourceView* check[2]={};
+     if(suppressIBL){
+       context->PSGetShaderResources(10,2,check);
+       char msg[180];sprintf_s(msg,"VISUAL_TEST_APPLIED mode=IBL_BLACK bound10=%u bound11=%u",
+         check[0]==blackCube?1:0,check[1]==blackCube?1:0);
+       writeLog(msg);
+       for(auto* p:check)if(p)p->Release();
+     }else{
+       context->PSGetShaderResources(3,1,check);
+       char msg[160];sprintf_s(msg,"VISUAL_TEST_APPLIED mode=T3_WHITE bound3=%u",check[0]==whiteT3?1:0);
+       writeLog(msg);
+       if(check[0])check[0]->Release();
+     }
+   }
    originalDrawIndexed(context,count,start,base);
    if(neutralizeT3){context->PSSetShaderResources(3,1,&prior);if(prior)prior->Release();neutralizedDraws.fetch_add(1);}
    if(suppressIBL){context->PSSetShaderResources(10,2,originalIBL);for(auto* p:originalIBL)if(p)p->Release();iblDraws.fetch_add(1);}
