@@ -31,6 +31,15 @@ def verify(path):
             raise ValueError('Specular IBL sampler s10 missing')
         if any(row[0]==3 and row[2]==11 for row in resources.values()):
             raise ValueError('Unexpected sampler s11: PC t10 and t11 use s10')
+    if '--shadow' in sys.argv:
+        if ('TEXCOORD',3) not in input_names:
+            raise ValueError('Shadow projection requires v6 / TEXCOORD3')
+        depth=resources.get('ShadowDepth')
+        sampler=resources.get('ShadowS')
+        if not depth or depth[0]!=2 or depth[2]!=19:
+            raise ValueError(f'Expected shadow depth texture at t19: {depth}')
+        if not sampler or sampler[0]!=3 or sampler[2]!=7:
+            raise ValueError(f'Expected shadow sampler at s7: {sampler}')
     print('PASS structural validation (not pixel equivalence):',path)
 
 if __name__=='__main__':
