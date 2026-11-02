@@ -24,7 +24,7 @@ jobs:
         with:
           repository: ocornut/imgui
           path: third_party/imgui
-          ref: v1.92.2b-docking
+          ref: v1.92.5-docking
       - name: Compile injector and ReShade add-on
         shell: pwsh
         run: |
