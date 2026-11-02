@@ -8,8 +8,8 @@ SamplerState S0:register(s0);
 SamplerState S2:register(s2);
 SamplerState S3:register(s3);
 
-// Exact register offsets obtained from the captured PC character shader's
-// original RDEF/ASM (Scene b1 = 1248 bytes, Batch b2 = 816 bytes).
+// EXPERIMENTAL assumptions about Scene/Batch offsets; must be checked against
+// original PC Shader disassembly, GPU values and the relevant coordinate spaces.
 cbuffer Scene:register(b1) { float4 sceneRegisters[78]; };
 cbuffer Batch:register(b2) { float4 batchRegisters[51]; };
 cbuffer XHDControl:register(b12) {
@@ -32,6 +32,11 @@ Output Main(Input v) {
  float3 normalTex=NormalMap.Sample(S2,v.uv.xy).xyz*2.0-1.0;
  float3 specTex=SpecMap.Sample(S3,v.uv.xy).rgb;
  float3 n=safeNormal(v.normal);
+ // Convert sampled tangent-space normal into the interpolated basis.
+ // Basis handedness and direction still require in-game verification.
+ float3 t=safeNormal(v.tangent-n*dot(n,v.tangent));
+ float3 b=safeNormal(v.binormal-n*dot(n,v.binormal)-t*dot(t,v.binormal));
+ float3 surfaceNormal=safeNormal(t*normalTex.x+b*normalTex.y+n*normalTex.z);
  // PC Scene: [14] chara diffuse, [15] ambient, [16] specular, [26] light direction.
  float3 ambient=max(sceneRegisters[15].rgb,0.0);
  float3 diffuseColor=max(sceneRegisters[14].rgb,0.0);
@@ -44,15 +49,15 @@ Output Main(Input v) {
  bool live=Flags.x==0x5848444c && Flags.y==2 && Flags.w!=0;
  float4 p=live?Eye:float4(0.25,0.35,0.25,0.20);
  float wrap=saturate(p.w);
- float nl=saturate((dot(n,-lightDir)+wrap)/(1.0+wrap));
+ float nl=saturate((dot(surfaceNormal,-lightDir)+wrap)/(1.0+wrap));
  float stylized=lerp(nl,smoothstep(0.0,1.0,nl),saturate(p.y));
  float3 shading=max(ambient,saturate(p.x).xxx)+diffuseColor*stylized;
  float3 result=base.rgb*materialDiffuse*shading+materialEmission;
- float3 tangentNormal=safeNormal(normalTex);
- float highlight=pow(saturate(dot(tangentNormal,float3(0,0,1))),8);
+ // Temporary light-facing highlight, not the original PC/PS4 specular BRDF.
+ float highlight=pow(saturate(dot(surfaceNormal,-lightDir)),8);
  result+=0.05*specTex*materialSpec*specColor*highlight*saturate(p.z);
  Output o; o.color=float4(saturate(result),base.a);
  // STOPSHIP: placeholder RT1. No fidelity or installability guarantee.
- o.aux=float4(0,2+n.x,2+0.9999519587*n.y-0.0098034879*n.z,0.01);
+ o.aux=float4(0,2+surfaceNormal.x,2+0.9999519587*surfaceNormal.y-0.0098034879*surfaceNormal.z,0.01);
  return o;
 }
