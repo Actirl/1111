@@ -283,7 +283,7 @@ static void disassembleOriginalShader(const void* data,SIZE_T len){
  FreeLibrary(compiler);
 }
 static void setup(){
- statusMapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(XHDStatus),L"Local\\\\XHDLookRenderer_Status_v1");
+ statusMapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(XHDStatus),L"Local\\XHDLookRenderer_Status_v1");
  if(statusMapping)statusView=(XHDStatus*)MapViewOfFile(statusMapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(XHDStatus));
  publishStatus();
  HMODULE module=nullptr;
