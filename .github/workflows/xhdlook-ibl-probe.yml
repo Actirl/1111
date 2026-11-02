@@ -24,7 +24,7 @@ jobs:
           New-Item -ItemType Directory -Path out -Force | Out-Null
           & $fxc /nologo /T ps_5_0 /E Main /I xhd-injector/shader-test /Fo out/scene_ibl_probe.cso xhd-injector/shader-test/xhdlook_scene_ibl_probe.hlsl
           if ($LASTEXITCODE -ne 0) { throw 'HLSL compilation failed' }
-          python xhd-injector/tools/check_scene_aux.py out/scene_ibl_probe.cso --ibl
+          python xhd-injector/tools/check_scene_aux.py out/scene_ibl_probe.cso --ibl --shadow
           if ($LASTEXITCODE -ne 0) { throw 'Structural preflight failed' }
           'EXPERIMENTAL ONLY: source uses unverified cubemap directions/LOD and aux MRT. Not a playable mod.' | Set-Content out/README.txt
       - uses: actions/upload-artifact@v4
