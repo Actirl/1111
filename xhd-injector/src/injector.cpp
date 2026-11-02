@@ -115,7 +115,7 @@ static bool readXHDLookParams(XHDLookParamsGPU& output) {
   if(view) {
     for(int attempt=0;attempt<5;++attempt) {
       unsigned before=view->sequence;
-      if(before&1)continue;
+      if(before&1)break;
       MemoryBarrier();
       XHDLookParamsGPU temp;
       memcpy(&temp,view,sizeof(temp));
@@ -168,7 +168,8 @@ static void captureBindings(ID3D11DeviceContext* context){
  bool matched=false;
  {
   std::lock_guard<std::mutex> lock(shaderMutex);
-  matched=std::find(activeTargets.begin(),activeTargets.end(),current)!=activeTargets.end();
+  matched=std::find_if(xhdPairs.begin(),xhdPairs.end(),[current](const auto& pair){return pair.first==current;})!=xhdPairs.end()
+           ||std::find(activeTargets.begin(),activeTargets.end(),current)!=activeTargets.end();
  }
  current->Release();
  if(!matched)return;
