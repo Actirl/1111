@@ -39,6 +39,10 @@ static void publishStatus(){
 
 static std::vector<unsigned char> replacement;
 static bool replacementOn=false;
+static bool discoveryOn=false;
+static std::atomic<unsigned> discovered{0};
+static std::mutex discoveryMutex;
+static std::vector<std::string> seenShaderHashes;
 static bool neutralizeT3=false;
 static bool suppressIBL=false;
 static ID3D11ShaderResourceView* blackCube=nullptr;
@@ -299,6 +303,7 @@ static void setup(){
  swprintf_s(ini,L"%ls%ls",path,L"xhd_injector.ini");
  swprintf_s(shader,L"%ls%ls",path,L"replacement.cso");
  replacementOn=GetPrivateProfileIntW(L"settings",L"enable_replacement",0,ini)!=0;
+ discoveryOn=GetPrivateProfileIntW(L"settings",L"discover_shader_hashes",0,ini)!=0;
  neutralizeT3=GetPrivateProfileIntW(L"settings",L"neutralize_t3",0,ini)!=0;
  suppressIBL=GetPrivateProfileIntW(L"settings",L"suppress_ibl_t10_t11",0,ini)!=0;
  if(neutralizeT3||suppressIBL)replacementOn=false;
@@ -315,6 +320,20 @@ static void setup(){
 }
 static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE_T len,ID3D11ClassLinkage* link,ID3D11PixelShader** out){
  created.fetch_add(1,std::memory_order_relaxed);
+ if(discoveryOn && data && len>=36 && memcmp(data,"DXBC",4)==0 && discovered.load()<512){
+   const unsigned char* bytes=static_cast<const unsigned char*>(data);
+   char key[33]={};
+   for(int n=0;n<16;++n)sprintf_s(key+2*n,33-2*n,"%02X",(unsigned)bytes[4+n]);
+   bool fresh=false;
+   {std::lock_guard<std::mutex> lock(discoveryMutex);
+     if(discovered.load()<512 && std::find(seenShaderHashes.begin(),seenShaderHashes.end(),std::string(key))==seenShaderHashes.end()){
+       seenShaderHashes.emplace_back(key);
+       discovered.fetch_add(1);
+       fresh=true;
+     }
+   }
+   if(fresh){char msg[120];sprintf_s(msg,"DISCOVERY_PIXEL_SHADER hash=%s bytes=%zu",key,(size_t)len);writeLog(msg);}
+ }
  if(data&&len>=36&&memcmp(data,"DXBC",4)==0&&memcmp((const unsigned char*)data+4,target,16)==0){
    hits.fetch_add(1,std::memory_order_relaxed);
    bool expected=false;
