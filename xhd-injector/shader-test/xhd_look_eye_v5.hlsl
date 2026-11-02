@@ -11,7 +11,6 @@ SamplerState SBase : register(s0);
 SamplerState SNormal : register(s2);
 SamplerState SMatte : register(s3);
 SamplerState SEnv : register(s9);
-SamplerState SEnvA : register(s9);
 SamplerState SEnvB : register(s10);
 cbuffer Scene : register(b1) { float4 SC[78]; };
 cbuffer Batch : register(b2) { float4 BA[51]; };
@@ -65,7 +64,7 @@ PSOutput Main(PSInput i) {
  float3 viewDir=SafeNormal(-i.tc1.xyz);
  float3 reflected=reflect(-viewDir,normal);
  float3 envLow=TEnvDiffuse.SampleLevel(SEnv,normal,1).rgb;
- float3 envA=TEnvA.SampleLevel(SEnvA,reflected,1).rgb;
+ float3 envA=TEnvA.SampleLevel(SEnv,reflected,1).rgb;
  float3 envB=TEnvB.SampleLevel(SEnvB,reflected,2).rgb;
  float3 softEnv=saturate(0.6*envLow+0.25*envA+0.15*envB);
  float3 iridescence=softEnv*(0.045+0.080*irisLikelihood);
