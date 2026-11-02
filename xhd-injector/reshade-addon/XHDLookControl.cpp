@@ -18,6 +18,14 @@ HANDLE mapping = nullptr;
 Parameters* shared = nullptr;
 int selected = 0;
 const char* labels[] = {"Eyes", "Skin", "Hair", "Clothes"};
+struct Status { std::uint32_t magic,version,createHook,drawHook,created,hits,replaced,failed,originalDraws,xhdDraws; };
+HANDLE statusHandle = nullptr;
+const Status* status = nullptr;
+void connectStatus() {
+ if(status)return;
+ if(!statusHandle)statusHandle=OpenFileMappingW(FILE_MAP_READ,FALSE,L"Local\\XHDLookRenderer_Status_v1");
+ if(statusHandle)status=(const Status*)MapViewOfFile(statusHandle,FILE_MAP_READ,0,0,sizeof(Status));
+}
 void initialize() {
  mapping = CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(Parameters),L"Local\\XHDLookRenderer_Params_v2");
  if (!mapping) return;
@@ -47,10 +55,21 @@ void overlay(reshade::api::effect_runtime*) {
  if (!shared) initialize();
  if (!shared) { ImGui::TextUnformatted("XHDLook: shared parameters unavailable"); return; }
  ImGui::TextUnformatted("XHD-Look Renderer - GPU b12 parameter bridge");
+ connectStatus();
+ if(status && status->magic==0x58484453u && status->version==1u) {
+   ImGui::SeparatorText("Injector / material matching diagnostics");
+   ImGui::Text("CreatePS Hook: %s | Draw Hook: %s",status->createHook?"YES":"NO",status->drawHook?"YES":"NO");
+   ImGui::Text("PS created: %u | Exact hash hits: %u",status->created,status->hits);
+   ImGui::Text("Replacement pairs: %u | Failed: %u",status->replaced,status->failed);
+   ImGui::Text("XHD draws: %u | Original draws: %u",status->xhdDraws,status->originalDraws);
+   if(status->hits==0) ImGui::TextUnformatted("No target shader match. This does NOT identify XHD models.");
+   else if(status->xhdDraws==0) ImGui::TextUnformatted("Hash seen, but custom shader has not rendered.");
+ } else ImGui::TextUnformatted("Injector telemetry unavailable. DLL may not be loaded.");
+ ImGui::SeparatorText("Per-material tuning (only Eyes is currently bound to the test shader)");
  ImGui::TextUnformatted("WARNING: This is a diagnostic replacement shader, NOT XHD fidelity.");
  ImGui::TextUnformatted("OFF: original game pixel shader; ON: diagnostic replacement.");
  ImGui::TextUnformatted("A/B requires the updated injector and working DrawIndexed hook.");
- ImGui::TextUnformatted("Skin/hair/clothes currently have no effect on GPU.");
+ ImGui::TextUnformatted("Skin/hair/clothes are not GPU-connected. No XHD model classifier yet.");
  Parameters p=*shared;
  bool changed=false;
  bool active=p.enabled!=0;
@@ -71,6 +90,8 @@ BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID) {
    reshade::register_overlay("XHD-Look Control",overlay);
  } else if(reason==DLL_PROCESS_DETACH) {
    reshade::unregister_addon(instance);
+   if(status)UnmapViewOfFile(status);
+   if(statusHandle)CloseHandle(statusHandle);
    if(shared)UnmapViewOfFile(shared);
    if(mapping)CloseHandle(mapping);
  }
