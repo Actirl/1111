@@ -1,0 +1,31 @@
+name: XHD Eye Final RGB Compile Gate
+on:
+  push:
+    branches: [xhd-injector-build-test]
+    paths:
+      - 'xhd-injector/shader-test/xhd_pc_eye_final_rgb.hlsl'
+      - 'xhd-injector/shader-test/xhd_pc_rgb_compile_harness.hlsl'
+      - '.github/workflows/xhd-pc-rgb-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile PC final color function with FXC
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $fxc=(Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter fxc.exe -Recurse | Where-Object FullName -Match 'x64' | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          if (!$fxc) { throw 'fxc missing' }
+          New-Item -ItemType Directory -Force out | Out-Null
+          & $fxc /nologo /T ps_5_0 /E Main /I 'xhd-injector/shader-test' /Fo out/pc_rgb_gate.cso 'xhd-injector/shader-test/xhd_pc_rgb_compile_harness.hlsl'
+          if ($LASTEXITCODE -ne 0) { throw 'FXC failed' }
+          if (!(Test-Path out/pc_rgb_gate.cso)) { throw 'DXBC absent' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHD-PC-RGB-Compile-Proof
+          path: out/pc_rgb_gate.cso
+          if-no-files-found: error
