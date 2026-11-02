@@ -55,7 +55,7 @@ def verify(path,variant):
     if variant=='nonsss':expect.add(('SV_TARGET',1,15))
     if out!=expect:raise ValueError(f'Wrong MRT layout: {out}, expected {expect}')
     resources=bindings(chunks.get('RDEF'))
-    expected={'XHDControl':(0,14),'Diffuse':(2,0),'NormalMap':(2,2),
+    expected={'XHDControl':(0,12),'Diffuse':(2,0),'NormalMap':(2,2),
               'SpecMap':(2,3),'S0':(3,0),'S2':(3,2),'S3':(3,3)}
     for name,(kind,slot) in expected.items():
         match=resources.get(name)
