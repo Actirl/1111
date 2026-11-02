@@ -44,6 +44,7 @@ void update(const Parameters& p) {
  shared->sequence=(seq&~1u)+2u;
 }
 void overlay(reshade::api::effect_runtime*) {
+ if (!shared) initialize();
  if (!shared) { ImGui::TextUnformatted("XHDLook: shared parameters unavailable"); return; }
  ImGui::TextUnformatted("XHD-Look Renderer - GPU parameter bridge");
  ImGui::TextUnformatted("WARNING: This is a diagnostic replacement shader, NOT XHD fidelity.");
@@ -67,7 +68,6 @@ void overlay(reshade::api::effect_runtime*) {
 BOOL WINAPI DllMain(HINSTANCE instance,DWORD reason,LPVOID) {
  if(reason==DLL_PROCESS_ATTACH) {
    if(!reshade::register_addon(instance)) return FALSE;
-   initialize();
    reshade::register_overlay("XHD-Look Control",overlay);
  } else if(reason==DLL_PROCESS_DETACH) {
    reshade::unregister_addon(instance);
