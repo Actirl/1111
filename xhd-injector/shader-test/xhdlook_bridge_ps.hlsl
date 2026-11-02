@@ -4,7 +4,7 @@ Texture2D<float4> SpecMap:register(t3);
 SamplerState S0:register(s0);
 SamplerState S2:register(s2);
 SamplerState S3:register(s3);
-cbuffer XHDControl:register(b13) {
+cbuffer XHDControl:register(b14) {
  uint4 Flags;
  float4 Eye;
  float4 Skin;
