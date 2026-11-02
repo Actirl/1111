@@ -3,7 +3,7 @@ on:
   push:
     branches: [xhd-injector-build-test]
     paths:
-      - '.github/workflows/xhd-eye-soft-cyan.yml'
+      - '.github/workflows/xhd-eye-soft-cyan-v2.yml'
       - 'xhd-injector/shader-test/xhd_eye_soft_cyan_v2.hlsl'
   workflow_dispatch:
 permissions:
