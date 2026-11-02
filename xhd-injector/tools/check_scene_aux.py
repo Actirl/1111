@@ -32,8 +32,8 @@ def verify(path):
         if any(row[0]==3 and row[2]==11 for row in resources.values()):
             raise ValueError('Unexpected sampler s11: PC t10 and t11 use s10')
     if '--shadow' in sys.argv:
-        if ('TEXCOORD',3) not in input_names:
-            raise ValueError('Shadow projection requires v6 / TEXCOORD3')
+        if ('TEXCOORD',2) not in input_names:
+            raise ValueError('Shadow projection requires original v6 / TEXCOORD2')
         depth=resources.get('ShadowDepth')
         sampler=resources.get('ShadowS')
         if not depth or depth[0]!=2 or depth[2]!=19:
