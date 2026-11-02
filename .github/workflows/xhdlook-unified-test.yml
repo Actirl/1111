@@ -29,13 +29,14 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          cmake -S xhd-injector -B build/injector -A x64
+          New-Item -ItemType Directory -Path diagnostics -Force | Out-Null
+          cmake -S xhd-injector -B build/injector -A x64 *>&1 | Tee-Object diagnostics/injector-configure.log
           if ($LASTEXITCODE -ne 0) { throw 'Injector CMake configure failed' }
-          cmake --build build/injector --config Release --parallel
+          cmake --build build/injector --config Release --parallel *>&1 | Tee-Object diagnostics/injector-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Injector build failed' }
-          cmake -S xhd-injector/reshade-addon -B build/addon -A x64
+          cmake -S xhd-injector/reshade-addon -B build/addon -A x64 *>&1 | Tee-Object diagnostics/addon-configure.log
           if ($LASTEXITCODE -ne 0) { throw 'Add-on CMake configure failed' }
-          cmake --build build/addon --config Release --parallel
+          cmake --build build/addon --config Release --parallel *>&1 | Tee-Object diagnostics/addon-build.log
           if ($LASTEXITCODE -ne 0) { throw 'Add-on build failed' }
       - name: Compile HLSL and package isolated diagnostic
         shell: pwsh
@@ -45,11 +46,11 @@ jobs:
           if (!$fxc) { throw 'fxc.exe not installed' }
           $stage='dist/XHDLook-Bridge-Test'
           New-Item -Path $stage -ItemType Directory -Force | Out-Null
-          & $fxc /nologo /T ps_5_0 /E Main /I 'xhd-injector/shader-test' /Fo "$stage/replacement.cso" 'xhd-injector/shader-test/xhdlook_scene_ibl_probe.hlsl'
+          & $fxc /nologo /T ps_5_0 /E Main /I 'xhd-injector/shader-test' /Fo "$stage/replacement.cso" 'xhd-injector/shader-test/xhdlook_scene_ibl_probe.hlsl' *>&1 | Tee-Object diagnostics/shader-fxc.log
           if ($LASTEXITCODE -ne 0) { throw 'HLSL compilation failed' }
           $shader=[IO.File]::ReadAllBytes("$stage/replacement.cso")
           if ($shader.Length -lt 36 -or [Text.Encoding]::ASCII.GetString($shader,0,4) -ne 'DXBC') {throw 'Compiled DXBC invalid'}
-          python xhd-injector/tools/check_scene_aux.py "$stage/replacement.cso" --ibl --shadow
+          python xhd-injector/tools/check_scene_aux.py "$stage/replacement.cso" --ibl --shadow *>&1 | Tee-Object diagnostics/shader-abi.log
           if ($LASTEXITCODE -ne 0) {throw 'Shader ABI gate failed'}
           Copy-Item 'build/injector/Release/XHDEyeInjector.dll' "$stage/XHDEyeInjector.dll"
           Copy-Item 'build/addon/Release/XHDLookControl.addon64' "$stage/XHDLookControl.addon64"
@@ -61,3 +62,11 @@ jobs:
           name: XHDLook-Unified-First-Prototype
           path: dist/XHDLook-Bridge-Test.zip
           if-no-files-found: error
+
+      - name: Upload compilation diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: XHDLook-First-Prototype-Diagnostics
+          path: diagnostics/
+          if-no-files-found: warn
