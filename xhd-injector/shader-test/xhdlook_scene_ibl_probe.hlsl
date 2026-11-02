@@ -1,5 +1,6 @@
 // XHD-Look: scene lighting + real PC IBL sampling, EXPERIMENTAL / NON-SHIPPING.
-// Does not implement PC shadow projection or XHD PS4 lighting. Do not install.
+// Implements the captured PC shadow sampling equation, but not its branch predicate.
+// NOT XHD PS4 lighting. Do not install until verified.
 #include "xhd_pc_aux_mrt.hlsli"
 #include "xhd_pc_lighting_kernels.hlsli"
 Texture2D<float4> Diffuse:register(t0);
@@ -8,11 +9,13 @@ Texture2D<float4> SpecMap:register(t3);
 TextureCube<float4> IBLLow:register(t9);
 TextureCube<float4> IBLSharp:register(t10);
 TextureCube<float4> IBLRough:register(t11);
+Texture2D<float4> ShadowDepth:register(t19);
 SamplerState S0:register(s0);
 SamplerState S2:register(s2);
 SamplerState S3:register(s3);
 SamplerState S9:register(s9);
 SamplerState S10:register(s10);
+SamplerState ShadowS:register(s7);
 cbuffer ShaderState:register(b0) { uint4 shaderState; };
 cbuffer Scene:register(b1) { float4 sceneRegisters[78]; };
 cbuffer Batch:register(b2) { float4 batchRegisters[51]; };
@@ -24,6 +27,7 @@ struct Input {
  float3 tangent:TANGENT0; float3 binormal:BINORMAL0;
  float4 uv:TEXCOORD0; float3 uv1:TEXCOORD1; float4 uv2:TEXCOORD2;
  float4 col0:COLOR0; float4 col1:COLOR1;
+ float4 shadowProject:TEXCOORD3; // original PC PS v6.xy = shadow UV; v6.z = projected depth
 };
 struct Output { float4 color:SV_Target0; float4 aux:SV_Target1; };
 float3 safeNormalize(float3 v) {return v*rsqrt(max(dot(v,v),1e-8));}
@@ -59,8 +63,12 @@ Output Main(Input i) {
    dot(sceneRegisters[44].xyz,N)));
  float3 diffuseLod0=IBLLow.SampleLevel(S9,diffuseDirection,0).rgb;
  float3 diffuseLod1=IBLLow.SampleLevel(S9,diffuseDirection,1).rgb;
- // Shadow-factor blend still needs original shadow-test path (t19).
- float3 diffuseIBL=XHDPCDiffuseIBLBlend(diffuseLod0,diffuseLod1,1.0);
+ // Original PC shadow draw uses v6.xy / v6.z, t19+s7 and cb1[45].x*cb2[30].w.
+ // The original branch predicate is still pending: this variant samples unconditionally.
+ float depth=ShadowDepth.Sample(ShadowS,i.shadowProject.xy).x;
+ float shadowFactor=XHDPCShadow(depth,i.shadowProject.z,sceneRegisters[45].x,
+                               batchRegisters[30].w,L,N);
+ float3 diffuseIBL=XHDPCDiffuseIBLBlend(diffuseLod0,diffuseLod1,shadowFactor);
  float3 sharpIBL=IBLSharp.Sample(S10,iblDirection).rgb;
  float3 roughIBL=IBLRough.Sample(S10,iblDirection).rgb;
  float3 specIBL=XHDPCSpecularIBLBlend(roughIBL,sharpIBL,saturate(batchRegisters[31].x));
