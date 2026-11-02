@@ -1,8 +1,8 @@
-// Reconstructed PC Mega39's+ original auxiliary MRT output.
+// EXPERIMENTAL partial reconstruction of PC Mega39's+ auxiliary MRT output.
 // Based on xhd_target_original_runtime.asm lines 223-251 and 380.
 // Important: PC reference path only; not proof of XHD/PS4 equivalence.
 // Inputs correspond to original v1 normal and cb0/b1/b2 states.
-// The code intentionally preserves the DXBC branching and bit logic.
+// STOPSHIP: this draft does not yet preserve the complete DXBC r4/r5 conditional\n// semantics. Do NOT include it in a shipping shader or present it as exact.
 #ifndef XHD_PC_AUX_MRT
 #define XHD_PC_AUX_MRT
 
