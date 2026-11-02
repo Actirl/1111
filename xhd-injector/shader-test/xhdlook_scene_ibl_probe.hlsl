@@ -28,7 +28,7 @@ struct Input {
  float3 tangent:TANGENT0; float3 binormal:BINORMAL0;
  float4 uv:TEXCOORD0; float3 uv1:TEXCOORD1; float4 uv2:TEXCOORD2;
  float4 col0:COLOR0; float4 col1:COLOR1;
- float4 shadowProject:TEXCOORD3; // original PC PS v6.xy = shadow UV; v6.z = projected depth
+ // PC original v6 is input register 6, semantic TEXCOORD2 (NOT TEXCOORD3).
 };
 struct Output { float4 color:SV_Target0; float4 aux:SV_Target1; };
 float3 safeNormalize(float3 v) {return v*rsqrt(max(dot(v,v),1e-8));}
@@ -70,9 +70,13 @@ Output Main(Input i) {
  float3 diffuseLod1=IBLLow.SampleLevel(S9,diffuseDirection,1).rgb;
  // Original PC shadow draw uses v6.xy / v6.z, t19+s7 and cb1[45].x*cb2[30].w.
  // The original branch predicate is still pending: this variant samples unconditionally.
- float depth=ShadowDepth.Sample(ShadowS,i.shadowProject.xy).x;
- float shadowFactor=XHDPCShadow(depth,i.shadowProject.z,sceneRegisters[45].x,
-                               batchRegisters[30].w,L,N);
+ // Original shadow guard is r0.w = ubfe(cb0[0].x, offset=9, width=1).
+ float shadowFactor=1.0;
+ if (((shaderState.x>>9)&1u)!=0u) {
+   float depth=ShadowDepth.Sample(ShadowS,i.uv2.xy).x;
+   shadowFactor=XHDPCShadow(depth,i.uv2.z,sceneRegisters[45].x,
+                            batchRegisters[30].w,L,N);
+ }
  float3 diffuseIBL=diffuseGain>0.0?XHDPCDiffuseIBLBlend(diffuseLod0,diffuseLod1,shadowFactor):float3(1,1,1);
  float3 sharpIBL=IBLSharp.Sample(S10,iblDirection).rgb;
  float3 roughIBL=IBLRough.Sample(S10,iblDirection).rgb;
