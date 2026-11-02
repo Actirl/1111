@@ -28,6 +28,19 @@ def sig(blob):
         entries.append((name,idx,mask&255,component))
     return entries
 
+def bindings(blob):
+    if blob is None: raise ValueError('Missing RDEF')
+    if len(blob)<32: raise ValueError('Truncated RDEF')
+    count,offset=struct.unpack_from('<II',blob,16)
+    if count>128 or offset+count*32>len(blob): raise ValueError('Invalid RDEF binding table')
+    result={}
+    for i in range(count):
+        nameoff,kind,ret,dimension,samples,slot,nslots,flags=struct.unpack_from('<8I',blob,offset+i*32)
+        if nameoff>=len(blob): raise ValueError('Invalid RDEF resource name')
+        name=blob[nameoff:].split(bytes([0]),1)[0].decode('ascii',errors='replace')
+        result[name]=(kind,dimension,slot,nslots)
+    return result
+
 def verify(path,variant):
     chunks=sections(pathlib.Path(path).read_bytes())
     inputs=sig(chunks.get('ISGN'))
@@ -41,6 +54,13 @@ def verify(path,variant):
     expect={('SV_TARGET',0,15)}
     if variant=='nonsss':expect.add(('SV_TARGET',1,15))
     if out!=expect:raise ValueError(f'Wrong MRT layout: {out}, expected {expect}')
+    resources=bindings(chunks.get('RDEF'))
+    expected={'XHDControl':(0,13),'Diffuse':(2,0),'NormalMap':(2,2),
+              'SpecMap':(2,3),'S0':(3,0),'S2':(3,2),'S3':(3,3)}
+    for name,(kind,slot) in expected.items():
+        match=resources.get(name)
+        if match is None or match[0]!=kind or match[2]!=slot or match[3]!=1:
+            raise ValueError(f'RDEF binding mismatch for {name}: {match}, expected type={kind}, slot={slot}')
     # Deliberately not testing numerical meaning of auxiliary RT.
     print(f'PASS structural DXBC {variant}: {path}. Not a rendering fidelity assertion.')
 
