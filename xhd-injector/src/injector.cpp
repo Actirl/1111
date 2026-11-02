@@ -100,7 +100,7 @@ static bool saveTexture(ID3D11DeviceContext* ctx, ID3D11ShaderResourceView* view
 }
 
 
-// XHDLOOK_GPU_BRIDGE_V2: ReShade Bridge v2 -> private D3D11 PS constant buffer b14. b13 is reserved by MMShader DivaLiveParams.
+// XHDLOOK_GPU_BRIDGE_V2: ReShade Bridge v2 -> private D3D11 PS constant buffer b12. b13 is reserved by MMShader DivaLiveParams.
 // This path only activates for pixel shaders replaced by this injector.
 static ID3D11Buffer* xhdLookCB=nullptr;
 struct XHDLookParamsGPU {
@@ -150,12 +150,12 @@ static bool drawWithXHDLookCB(ID3D11DeviceContext* context,UINT count,UINT start
  }
  context->UpdateSubresource(xhdLookCB,0,nullptr,&cfg,0,0);
  ID3D11Buffer* oldCB=nullptr;
- context->PSGetConstantBuffers(14,1,&oldCB);
- context->PSSetConstantBuffers(14,1,&xhdLookCB);
+ context->PSGetConstantBuffers(12,1,&oldCB);
+ context->PSSetConstantBuffers(12,1,&xhdLookCB);
  context->PSSetShader(custom,nullptr,0);
  originalDrawIndexed(context,count,start,base);
  context->PSSetShader(current,nullptr,0);
- context->PSSetConstantBuffers(14,1,&oldCB);
+ context->PSSetConstantBuffers(12,1,&oldCB);
  if(oldCB)oldCB->Release();
  xhdDraws.fetch_add(1,std::memory_order_relaxed);
  current->Release();custom->Release();return true;
