@@ -48,6 +48,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'HLSL compilation failed' }
           $shader=[IO.File]::ReadAllBytes("$stage/replacement.cso")
           if ($shader.Length -lt 36 -or [Text.Encoding]::ASCII.GetString($shader,0,4) -ne 'DXBC') {throw 'Compiled DXBC invalid'}
+          python xhd-injector/tools/check_xhdlook_abi.py "$stage/replacement.cso" --variant nonsss
+          if ($LASTEXITCODE -ne 0) {throw 'Shader ABI gate failed'}
           Copy-Item 'build/injector/Release/XHDEyeInjector.dll' "$stage/XHDEyeInjector.dll"
           Copy-Item 'build/addon/Release/XHDLookControl.addon64' "$stage/XHDLookControl.addon64"
           @('[settings]','enable_replacement=1','neutralize_t3=0','suppress_ibl_t10_t11=0') | Set-Content "$stage/xhd_injector.ini" -Encoding ascii
