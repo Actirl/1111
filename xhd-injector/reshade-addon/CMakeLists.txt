@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.21)
+project(XHDLookReShadeAddon LANGUAGES CXX)
+add_library(XHDLookControl SHARED XHDLookControl.cpp)
+target_compile_features(XHDLookControl PRIVATE cxx_std_17)
+target_include_directories(XHDLookControl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/reshade/include ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/imgui)
+set_target_properties(XHDLookControl PROPERTIES PREFIX "" SUFFIX ".addon64")
