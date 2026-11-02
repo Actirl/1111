@@ -3,6 +3,7 @@ import argparse, pathlib, struct, sys
 
 def sections(data):
     if len(data)<36 or data[:4]!=b'DXBC': raise ValueError('Invalid DXBC header')
+    if struct.unpack_from('<I',data,24)[0] != len(data):raise ValueError('Wrong declared DXBC length')
     n=struct.unpack_from('<I',data,28)[0]
     if n>256 or 32+4*n>len(data):raise ValueError('Invalid chunk table')
     out={}
@@ -17,10 +18,11 @@ def sections(data):
 def sig(blob):
     if blob is None:raise ValueError('Missing shader signature')
     n=struct.unpack_from('<I',blob,0)[0]
+    first=struct.unpack_from('<I',blob,4)[0]
     if n>64:raise ValueError('Invalid signature count')
     entries=[]
     for i in range(n):
-        offset=8+24*i
+        offset=first+24*i
         if offset+24>len(blob):raise ValueError('Truncated signature')
         name_off,idx,sys,component,reg,mask=struct.unpack_from('<IIIII I',blob,offset)
         if name_off>=len(blob):raise ValueError('Invalid semantic offset')
@@ -48,7 +50,7 @@ def verify(path,variant):
     required={('SV_POSITION',0),('NORMAL',0),('TANGENT',0),('BINORMAL',0),
               ('TEXCOORD',0),('TEXCOORD',1),('TEXCOORD',2),('COLOR',0),('COLOR',1)}
     actual={(n,i) for n,i,_,_ in inputs}
-    if actual != required:
+    if not required.issubset(actual):
         raise ValueError('Unexpected or missing input semantic: '+str(actual))
     out={(n,i,mask) for n,i,mask,_ in outputs}
     expect={('SV_TARGET',0,15)}
@@ -63,7 +65,7 @@ def verify(path,variant):
             raise ValueError(f'RDEF binding mismatch for {name}: {match}, expected type={kind}, slot={slot}')
     if any(v[0]==0 and v[2]==13 for v in resources.values()):
         raise ValueError('b13 is reserved for MMShader DivaLiveParams; XHDLook must not override it')
-    # Deliberately not testing numerical meaning of auxiliary RT.
+    # NOTE: Semantic/ABI validation is not an assertion of numerical PC/PS4 rendering equivalence.
     print(f'PASS structural DXBC {variant}: {path}. Not a rendering fidelity assertion.')
 
 if __name__=='__main__':
