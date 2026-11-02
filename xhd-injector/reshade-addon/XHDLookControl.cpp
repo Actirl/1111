@@ -46,7 +46,7 @@ void update(const Parameters& p) {
 void overlay(reshade::api::effect_runtime*) {
  if (!shared) initialize();
  if (!shared) { ImGui::TextUnformatted("XHDLook: shared parameters unavailable"); return; }
- ImGui::TextUnformatted("XHD-Look Renderer - GPU parameter bridge");
+ ImGui::TextUnformatted("XHD-Look Renderer - GPU b14 parameter bridge");
  ImGui::TextUnformatted("WARNING: This is a diagnostic replacement shader, NOT XHD fidelity.");
  ImGui::TextUnformatted("OFF: original game pixel shader; ON: diagnostic replacement.");
  ImGui::TextUnformatted("A/B requires the updated injector and working DrawIndexed hook.");
