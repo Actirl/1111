@@ -2,7 +2,8 @@
 // Based on xhd_target_original_runtime.asm lines 223-251 and 380.
 // Important: PC reference path only; not proof of XHD/PS4 equivalence.
 // Inputs correspond to original v1 normal and cb0/b1/b2 states.
-// STOPSHIP: this draft does not yet preserve the complete DXBC r4/r5 conditional\n// semantics. Do NOT include it in a shipping shader or present it as exact.
+// STOPSHIP: this draft does not yet preserve the complete DXBC r4/r5 conditional
+// semantics. Do NOT include it in a shipping shader or present it as exact.
 #ifndef XHD_PC_AUX_MRT
 #define XHD_PC_AUX_MRT
 
@@ -26,8 +27,8 @@ float4 XHDPCOriginalAux(
     bool fullSceneWeight=scene32.w>=1.0;
     bool cond=identicalScene && fullSceneWeight;
     // Original initial r0.z derives from ubfe/ieq in the PC shader header.
-    // The exact initial flag is cb0[0].x bits 10-11 == 1
-    // (r0.z = ieq(ubfe(cb0[0].x,10,1),1)).
+    // DXBC bitfield extraction and comparison need verification;
+    // a one-bit test below is only a hypothesis, NOT an exact reconstruction.
     bool mode=((shaderFlags.x>>10)&1u)!=0u;
     float4 r4=float4(0,stateYZ.x,stateYZ.y,0);
     float4 r5=cond?float4(0,100,0,1):r4;
