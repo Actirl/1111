@@ -27,6 +27,16 @@ static DrawIndexedFn originalDrawIndexed=nullptr;
 static std::atomic<unsigned long> created{0},hits{0},frames{0};
 static std::atomic<bool> enabled{false};
 static std::atomic<unsigned long> replaced{0}, failed{0};
+struct XHDStatus { unsigned magic,version,createHook,drawHook,created,hits,replaced,failed,originalDraws,xhdDraws; };
+static HANDLE statusMapping=nullptr;
+static XHDStatus* statusView=nullptr;
+static void publishStatus(){
+ if(!statusView)return;
+ XHDStatus snapshot={0x58484453u,1u,enabled.load()?1u:0u,drawHookReady.load()?1u:0u,
+ created.load(),hits.load(),replaced.load(),failed.load(),originalDraws.load(),xhdDraws.load()};
+ *statusView=snapshot;
+}
+
 static std::vector<unsigned char> replacement;
 static bool replacementOn=false;
 static bool neutralizeT3=false;
@@ -273,6 +283,9 @@ static void disassembleOriginalShader(const void* data,SIZE_T len){
  FreeLibrary(compiler);
 }
 static void setup(){
+ statusMapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(XHDStatus),L"Local\\\\XHDLookRenderer_Status_v1");
+ if(statusMapping)statusView=(XHDStatus*)MapViewOfFile(statusMapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(XHDStatus));
+ publishStatus();
  HMODULE module=nullptr;
  wchar_t path[MAX_PATH]={0};
  if(GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -403,6 +416,7 @@ extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,
 extern "C" __declspec(dllexport) void OnFrame(IDXGISwapChain*){
  PreInit();
  const unsigned long frame=++frames;
+ publishStatus();
  if(frame==1||frame%600==0){
  char buf[160];
  sprintf_s(buf,"frames=%lu hook=%d drawhook=%d CreatePS=%lu target=%lu replaced=%lu fail=%lu original_draws=%lu xhd_draws=%lu t3neutral_draws=%lu ibl_draws=%lu",frame,enabled.load()?1:0,drawHookReady.load()?1:0,created.load(),hits.load(),replaced.load(),failed.load(),originalDraws.load(),xhdDraws.load(),neutralizedDraws.load(),iblDraws.load());
