@@ -17,6 +17,9 @@ static CreatePS original = nullptr;
 static std::mutex hookMutex;
 static std::mutex shaderMutex;
 static std::vector<ID3D11PixelShader*> activeTargets;
+// Runtime-switchable pair: game-original shader -> XHDLook replacement.
+static std::vector<std::pair<ID3D11PixelShader*, ID3D11PixelShader*>> xhdPairs;
+static std::atomic<unsigned long> originalDraws{0}, xhdDraws{0};
 static std::atomic<bool> bindingsCaptured{false};
 using DrawIndexedFn=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT,INT);
 static DrawIndexedFn originalDrawIndexed=nullptr;
@@ -127,31 +130,34 @@ static bool readXHDLookParams(XHDLookParamsGPU& output) {
   return good;
 }
 static bool drawWithXHDLookCB(ID3D11DeviceContext* context,UINT count,UINT start,INT base) {
-  if(!replacementOn || !xhdLookCB)return false;
-  ID3D11PixelShader* current=nullptr;
-  context->PSGetShader(&current,nullptr,nullptr);
-  bool matched=false;
-  if(current) {
-    {std::lock_guard<std::mutex> lock(shaderMutex);
-     matched=std::find(activeTargets.begin(),activeTargets.end(),current)!=activeTargets.end();}
-    current->Release();
-  }
-  if(!matched)return false;
-  XHDLookParamsGPU cfg={};
-  if(!readXHDLookParams(cfg)) {
-    cfg.enabled=0;
-    const float defaults[16]={0.32f,0.40f,0.35f,0.25f,0.18f,0.28f,0.14f,0.20f,
-                              0.16f,0.32f,0.48f,0.17f,0.15f,0.35f,0.30f,0.10f};
-    memcpy(cfg.materials,defaults,sizeof(defaults));
-  }
-  context->UpdateSubresource(xhdLookCB,0,nullptr,&cfg,0,0);
-  ID3D11Buffer* old=nullptr;
-  context->PSGetConstantBuffers(13,1,&old);
-  context->PSSetConstantBuffers(13,1,&xhdLookCB);
-  originalDrawIndexed(context,count,start,base);
-  context->PSSetConstantBuffers(13,1,&old);
-  if(old)old->Release();
-  return true;
+ if(!replacementOn || !originalDrawIndexed)return false;
+ ID3D11PixelShader* current=nullptr;
+ context->PSGetShader(&current,nullptr,nullptr);
+ if(!current)return false;
+ ID3D11PixelShader* custom=nullptr;
+ {std::lock_guard<std::mutex> lock(shaderMutex);
+  for(const auto& pair:xhdPairs)if(pair.first==current){custom=pair.second;custom->AddRef();break;}
+ }
+ if(!custom){current->Release();return false;}
+ XHDLookParamsGPU cfg={};
+ bool valid=readXHDLookParams(cfg);
+ // A/B off: use the exact original GPU shader and render state, no resource override.
+ if(!valid || cfg.enabled==0 || !xhdLookCB){
+   originalDrawIndexed(context,count,start,base);
+   originalDraws.fetch_add(1,std::memory_order_relaxed);
+   current->Release();custom->Release();return true;
+ }
+ context->UpdateSubresource(xhdLookCB,0,nullptr,&cfg,0,0);
+ ID3D11Buffer* oldCB=nullptr;
+ context->PSGetConstantBuffers(13,1,&oldCB);
+ context->PSSetConstantBuffers(13,1,&xhdLookCB);
+ context->PSSetShader(custom,nullptr,0);
+ originalDrawIndexed(context,count,start,base);
+ context->PSSetShader(current,nullptr,0);
+ context->PSSetConstantBuffers(13,1,&oldCB);
+ if(oldCB)oldCB->Release();
+ xhdDraws.fetch_add(1,std::memory_order_relaxed);
+ current->Release();custom->Release();return true;
 }
 
 static void captureBindings(ID3D11DeviceContext* context){
@@ -309,11 +315,23 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
      }
    }
    if(replacementOn&&!replacement.empty()&&out){
+     // Keep the original shader owned by the game. Switch only during its draws.
+     HRESULT originalStatus=original(dev,data,len,link,out);
+     if(FAILED(originalStatus)||!*out)return originalStatus;
      ID3D11PixelShader* candidate=nullptr;
-     HRESULT status=original(dev,replacement.data(),replacement.size(),link,&candidate);
-     if(SUCCEEDED(status)&&candidate){*out=candidate;{std::lock_guard<std::mutex> lock(shaderMutex);activeTargets.push_back(candidate);}replaced.fetch_add(1);return status;}
-     if(candidate)candidate->Release();
-     failed.fetch_add(1);
+     HRESULT customStatus=original(dev,replacement.data(),replacement.size(),link,&candidate);
+     if(SUCCEEDED(customStatus)&&candidate){
+       {std::lock_guard<std::mutex> lock(shaderMutex);
+        xhdPairs.emplace_back(*out,candidate);
+        // Keep a reference to the game's original shader to prevent stale pointer reuse.
+        (*out)->AddRef();
+       }
+       replaced.fetch_add(1);
+     }else{
+       if(candidate)candidate->Release();
+       failed.fetch_add(1);
+     }
+     return originalStatus;
    }
  }
  HRESULT result=original(dev,data,len,link,out);
@@ -381,7 +399,7 @@ extern "C" __declspec(dllexport) void OnFrame(IDXGISwapChain*){
  const unsigned long frame=++frames;
  if(frame==1||frame%600==0){
  char buf[160];
- sprintf_s(buf,"frames=%lu hook=%d CreatePS=%lu target=%lu replaced=%lu fail=%lu t3neutral_draws=%lu ibl_draws=%lu",frame,enabled.load()?1:0,created.load(),hits.load(),replaced.load(),failed.load(),neutralizedDraws.load(),iblDraws.load());
+ sprintf_s(buf,"frames=%lu hook=%d CreatePS=%lu target=%lu replaced=%lu fail=%lu original_draws=%lu xhd_draws=%lu t3neutral_draws=%lu ibl_draws=%lu",frame,enabled.load()?1:0,created.load(),hits.load(),replaced.load(),failed.load(),originalDraws.load(),xhdDraws.load(),neutralizedDraws.load(),iblDraws.load());
  writeLog(buf);
  }
 }
