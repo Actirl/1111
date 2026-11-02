@@ -20,6 +20,7 @@ static std::vector<ID3D11PixelShader*> activeTargets;
 // Runtime-switchable pair: game-original shader -> XHDLook replacement.
 static std::vector<std::pair<ID3D11PixelShader*, ID3D11PixelShader*>> xhdPairs;
 static std::atomic<unsigned long> originalDraws{0}, xhdDraws{0};
+static std::atomic<bool> drawHookReady{false};
 static std::atomic<bool> bindingsCaptured{false};
 using DrawIndexedFn=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT,INT);
 static DrawIndexedFn originalDrawIndexed=nullptr;
@@ -130,7 +131,7 @@ static bool readXHDLookParams(XHDLookParamsGPU& output) {
   return good;
 }
 static bool drawWithXHDLookCB(ID3D11DeviceContext* context,UINT count,UINT start,INT base) {
- if(!replacementOn || !originalDrawIndexed)return false;
+ if(!replacementOn || !drawHookReady.load(std::memory_order_acquire) || !originalDrawIndexed)return false;
  ID3D11PixelShader* current=nullptr;
  context->PSGetShader(&current,nullptr,nullptr);
  if(!current)return false;
@@ -315,7 +316,7 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
        writeLog("original DXBC capture failed: file access");
      }
    }
-   if(replacementOn&&!replacement.empty()&&out){
+   if(replacementOn&&!replacement.empty()&&out&&drawHookReady.load(std::memory_order_acquire)){
      // Keep the original shader owned by the game. Switch only during its draws.
      HRESULT originalStatus=original(dev,data,len,link,out);
      if(FAILED(originalStatus)||!*out)return originalStatus;
@@ -391,8 +392,12 @@ extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,
  if(context){
    void* draw=(*reinterpret_cast<void***>(context))[12];
    MH_STATUS ds=MH_CreateHook(draw,(void*)&observeDrawIndexed,(void**)&originalDrawIndexed);
-   if(ds==MH_OK && MH_EnableHook(draw)==MH_OK)writeLog("DrawIndexed resource snapshot hook enabled");
-   else writeLog("DrawIndexed hook failed; shader replacement remains enabled");
+   if(ds==MH_OK && MH_EnableHook(draw)==MH_OK){
+     drawHookReady.store(true,std::memory_order_release);
+     writeLog("DrawIndexed hook enabled; runtime shader A/B available");
+   }else{
+     writeLog("DrawIndexed hook failed; XHD replacement disabled (safe original only)");
+   }
  }
 }
 extern "C" __declspec(dllexport) void OnFrame(IDXGISwapChain*){
@@ -400,7 +405,7 @@ extern "C" __declspec(dllexport) void OnFrame(IDXGISwapChain*){
  const unsigned long frame=++frames;
  if(frame==1||frame%600==0){
  char buf[160];
- sprintf_s(buf,"frames=%lu hook=%d CreatePS=%lu target=%lu replaced=%lu fail=%lu original_draws=%lu xhd_draws=%lu t3neutral_draws=%lu ibl_draws=%lu",frame,enabled.load()?1:0,created.load(),hits.load(),replaced.load(),failed.load(),originalDraws.load(),xhdDraws.load(),neutralizedDraws.load(),iblDraws.load());
+ sprintf_s(buf,"frames=%lu hook=%d drawhook=%d CreatePS=%lu target=%lu replaced=%lu fail=%lu original_draws=%lu xhd_draws=%lu t3neutral_draws=%lu ibl_draws=%lu",frame,enabled.load()?1:0,drawHookReady.load()?1:0,created.load(),hits.load(),replaced.load(),failed.load(),originalDraws.load(),xhdDraws.load(),neutralizedDraws.load(),iblDraws.load());
  writeLog(buf);
  }
 }
