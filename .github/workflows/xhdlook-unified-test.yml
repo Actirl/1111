@@ -1,0 +1,61 @@
+name: XHDLook Unified ReShade + Injector + Shader Build
+on:
+  workflow_dispatch:
+  push:
+    branches: [xhd-injector-build-test]
+    paths:
+      - 'xhd-injector/src/**'
+      - 'xhd-injector/reshade-addon/**'
+      - 'xhd-injector/shader-test/xhdlook_bridge_ps.hlsl'
+      - '.github/workflows/xhdlook-unified-test.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: crosire/reshade
+          path: third_party/reshade
+      - uses: actions/checkout@v4
+        with:
+          repository: ocornut/imgui
+          path: third_party/imgui
+          ref: v1.92.2b-docking
+      - name: Compile injector and ReShade add-on
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          cmake -S xhd-injector -B build/injector -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'Injector CMake configure failed' }
+          cmake --build build/injector --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Injector build failed' }
+          cmake -S xhd-injector/reshade-addon -B build/addon -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'Add-on CMake configure failed' }
+          cmake --build build/addon --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Add-on build failed' }
+      - name: Compile HLSL and package isolated diagnostic
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $fxc=Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter fxc.exe -Recurse -ErrorAction SilentlyContinue | Where-Object FullName -Match 'x64' | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          if (!$fxc) { throw 'fxc.exe not installed' }
+          $stage='dist/XHDLook-Bridge-Test'
+          New-Item -Path $stage -ItemType Directory -Force | Out-Null
+          & $fxc /nologo /T ps_5_0 /E Main /Fo "$stage/replacement.cso" 'xhd-injector/shader-test/xhdlook_bridge_ps.hlsl'
+          if ($LASTEXITCODE -ne 0) { throw 'HLSL compilation failed' }
+          $shader=[IO.File]::ReadAllBytes("$stage/replacement.cso")
+          if ($shader.Length -lt 36 -or [Text.Encoding]::ASCII.GetString($shader,0,4) -ne 'DXBC') {throw 'Compiled DXBC invalid'}
+          Copy-Item 'build/injector/Release/XHDEyeInjector.dll' "$stage/XHDEyeInjector.dll"
+          Copy-Item 'build/addon/Release/XHDLookControl.addon64' "$stage/XHDLookControl.addon64"
+          @('[settings]','enable_replacement=1','neutralize_t3=0','suppress_ibl_t10_t11=0') | Set-Content "$stage/xhd_injector.ini" -Encoding ascii
+          @('enabled = true','dll = ["XHDEyeInjector.dll"]','name = "XHDLook Bridge Diagnostic"','author = "Shader Research"','version = "0.1"') | Set-Content "$stage/config.toml" -Encoding utf8
+          @('EXPERIMENTAL - This is NOT a finished XHD look or a complete material shader.','Auxiliary MRT is approximated; backup first. Do not combine with other shader replacement plugins.','ReShade must already be installed with add-on support. Load XHDLookControl.addon64 via ReShade.','Check xhd_shader_observer.log for replaced > 0 and GPU bridge initialization.','Remove test MOD folder to uninstall.') | Set-Content "$stage/README.txt" -Encoding utf8
+          Compress-Archive -Path "$stage/*" -DestinationPath 'dist/XHDLook-Bridge-Test.zip' -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHDLook-Unified-Diagnostic
+          path: dist/XHDLook-Bridge-Test.zip
+          if-no-files-found: error
