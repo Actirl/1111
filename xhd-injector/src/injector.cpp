@@ -45,7 +45,7 @@ static bool additionalTargetValid=false;
 static bool parseHash16(const wchar_t* value,unsigned char* output){
  if(!value||wcslen(value)!=32)return false;
  for(int i=0;i<16;++i){unsigned x=0;wchar_t c1=value[2*i],c2=value[2*i+1];
-  auto digit=[](wchar_t c)->int{return c>=L\'0\'&&c<=L\'9\'?c-L\'0\':c>=L\'A\'&&c<=L\'F\'?c-L\'A\'+10:c>=L\'a\'&&c<=L\'f\'?c-L\'a\'+10:-1;};
+  auto digit=[](wchar_t c)->int{return c>=L'0'&&c<=L'9'?c-L'0':c>=L'A'&&c<=L'F'?c-L'A'+10:c>=L'a'&&c<=L'f'?c-L'a'+10:-1;};
   int a=digit(c1),b=digit(c2);if(a<0||b<0)return false;x=(unsigned)((a<<4)|b);output[i]=(unsigned char)x;}
  return true;
 }
@@ -304,7 +304,7 @@ static void setup(){
  if(GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
  reinterpret_cast<LPCWSTR>(&setup),&module)){
  if(GetModuleFileNameW(module,path,MAX_PATH)){
- wchar_t* slash=wcsrchr(path,L'\\');
+ wchar_t* slash=wcsrchr(path,L'\');
  if(slash){slash[1]=0;swprintf_s(logfile,L"%ls%ls",path,L"xhd_shader_observer.log");swprintf_s(originalShaderFile,L"%ls%ls",path,L"xhd_target_original_runtime.cso");swprintf_s(asmPath,L"%ls%ls",path,L"xhd_target_original_runtime.asm");swprintf_s(textureBase,L"%ls%ls",path,L"xhd_eye_capture");}
  }
  }
