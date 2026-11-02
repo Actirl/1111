@@ -51,7 +51,7 @@ jobs:
           Copy-Item 'build/injector/Release/XHDEyeInjector.dll' "$stage/XHDEyeInjector.dll"
           Copy-Item 'build/addon/Release/XHDLookControl.addon64' "$stage/XHDLookControl.addon64"
           @('[settings]','enable_replacement=1','neutralize_t3=0','suppress_ibl_t10_t11=0') | Set-Content "$stage/xhd_injector.ini" -Encoding ascii
-          @('BUILD OUTPUT ONLY - NOT AN INSTALLABLE MOD.','Injector loading configuration depends on the actual DivaModLoader version; no config.toml is generated.','Experimental shader uses approximate SV_Target1 and may break rendering. DO NOT install without ABI review.','ReShade overlay switch does not bypass shader replacement; disabling requires replacement=0 and restarting.','This artifact only checks that all three components compile.') | Set-Content "$stage/README.txt" -Encoding utf8
+          @('BUILD OUTPUT ONLY - NOT AN INSTALLABLE MOD.','Injector loading configuration depends on the actual DivaModLoader version; no config.toml is generated.','Experimental shader uses approximate SV_Target1 and may break rendering. DO NOT install without ABI review.','The updated injector preserves the original shader and switches per draw when the bridge is ON. Requires working DrawIndexed hook.','This artifact only checks that all three components compile.') | Set-Content "$stage/README.txt" -Encoding utf8
           Compress-Archive -Path "$stage/*" -DestinationPath 'dist/XHDLook-Bridge-Test.zip' -Force
       - uses: actions/upload-artifact@v4
         with:
