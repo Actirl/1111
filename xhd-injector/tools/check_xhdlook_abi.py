@@ -31,7 +31,7 @@ def sig(blob):
 def bindings(blob):
     if blob is None: raise ValueError('Missing RDEF')
     if len(blob)<32: raise ValueError('Truncated RDEF')
-    count,offset=struct.unpack_from('<II',blob,16)
+    count,offset=struct.unpack_from('<II',blob,8)
     if count>128 or offset+count*32>len(blob): raise ValueError('Invalid RDEF binding table')
     result={}
     for i in range(count):
