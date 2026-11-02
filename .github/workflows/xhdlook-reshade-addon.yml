@@ -1,0 +1,33 @@
+name: XHDLook ReShade Addon Windows Build
+on:
+  workflow_dispatch:
+  push:
+    branches: [xhd-injector-build-test]
+    paths:
+      - 'xhd-injector/reshade-addon/**'
+      - '.github/workflows/xhdlook-reshade-addon.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: crosire/reshade
+          path: third_party/reshade
+      - uses: actions/checkout@v4
+        with:
+          repository: ocornut/imgui
+          ref: v1.92.2b-docking
+          path: third_party/imgui
+      - name: Build ReShade add-on
+        run: |
+          cmake -S xhd-injector/reshade-addon -B build/xhdlook-addon -A x64
+          cmake --build build/xhdlook-addon --config Release --parallel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XHDLook-ReShade-Addon-Build
+          path: build/xhdlook-addon/Release/*.addon64
+          if-no-files-found: error
