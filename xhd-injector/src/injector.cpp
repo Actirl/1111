@@ -95,6 +95,65 @@ static bool saveTexture(ID3D11DeviceContext* ctx, ID3D11ShaderResourceView* view
  ctx->Unmap(staging,0);staging->Release();return ok;
 }
 
+
+// XHDLOOK_GPU_BRIDGE_V1: ReShade Bridge v2 -> D3D11 PS constant buffer b13.
+// This path only activates for pixel shaders replaced by this injector.
+static ID3D11Buffer* xhdLookCB=nullptr;
+struct XHDLookParamsGPU {
+  unsigned signature, abiVersion, sequence, enabled;
+  float materials[16];  // eyes, skin, hair, clothes; 4 floats each
+};
+static_assert(sizeof(XHDLookParamsGPU)==80, "ReShade shared ABI size mismatch");
+static bool readXHDLookParams(XHDLookParamsGPU& output) {
+  HANDLE h=OpenFileMappingW(FILE_MAP_READ,FALSE,L"Local\\XHDLookRenderer_Params_v2");
+  if(!h)return false;
+  const auto* view=(const XHDLookParamsGPU*)MapViewOfFile(h,FILE_MAP_READ,0,0,sizeof(output));
+  bool good=false;
+  if(view) {
+    for(int attempt=0;attempt<5;++attempt) {
+      unsigned before=view->sequence;
+      if(before&1)continue;
+      MemoryBarrier();
+      XHDLookParamsGPU temp;
+      memcpy(&temp,view,sizeof(temp));
+      MemoryBarrier();
+      if(before==view->sequence && !(before&1) && temp.signature==0x5848444c && temp.abiVersion==2) {
+        output=temp;good=true;break;
+      }
+    }
+    UnmapViewOfFile(view);
+  }
+  CloseHandle(h);
+  return good;
+}
+static bool drawWithXHDLookCB(ID3D11DeviceContext* context,UINT count,UINT start,INT base) {
+  if(!replacementOn || !xhdLookCB)return false;
+  ID3D11PixelShader* current=nullptr;
+  context->PSGetShader(&current,nullptr,nullptr);
+  bool matched=false;
+  if(current) {
+    {std::lock_guard<std::mutex> lock(shaderMutex);
+     matched=std::find(activeTargets.begin(),activeTargets.end(),current)!=activeTargets.end();}
+    current->Release();
+  }
+  if(!matched)return false;
+  XHDLookParamsGPU cfg={};
+  if(!readXHDLookParams(cfg)) {
+    cfg.enabled=0;
+    const float defaults[16]={0.32f,0.40f,0.35f,0.25f,0.18f,0.28f,0.14f,0.20f,
+                              0.16f,0.32f,0.48f,0.17f,0.15f,0.35f,0.30f,0.10f};
+    memcpy(cfg.materials,defaults,sizeof(defaults));
+  }
+  context->UpdateSubresource(xhdLookCB,0,nullptr,&cfg,0,0);
+  ID3D11Buffer* old=nullptr;
+  context->PSGetConstantBuffers(13,1,&old);
+  context->PSSetConstantBuffers(13,1,&xhdLookCB);
+  originalDrawIndexed(context,count,start,base);
+  context->PSSetConstantBuffers(13,1,&old);
+  if(old)old->Release();
+  return true;
+}
+
 static void captureBindings(ID3D11DeviceContext* context){
  if(bindingsCaptured.load(std::memory_order_acquire))return;
  ID3D11PixelShader* current=nullptr;
@@ -150,6 +209,7 @@ static void captureBindings(ID3D11DeviceContext* context){
 }
 static void STDMETHODCALLTYPE observeDrawIndexed(ID3D11DeviceContext* context,UINT count,UINT start,INT base){
  captureBindings(context);
+ if(drawWithXHDLookCB(context,count,start,base))return;
  if((neutralizeT3 && whiteT3)||(suppressIBL && blackCube)){
   ID3D11PixelShader* current=nullptr;context->PSGetShader(&current,nullptr,nullptr);
   bool matched=false;
@@ -269,6 +329,14 @@ extern "C" __declspec(dllexport) void PostInit(){writeLog("PostInit called");}
 extern "C" __declspec(dllexport) void D3DInit(IDXGISwapChain*,ID3D11Device* dev,ID3D11DeviceContext* context){
  Init();
  if(!dev){writeLog("D3DInit: device null");return;}
+ if(!xhdLookCB){
+   D3D11_BUFFER_DESC cbd={};
+   cbd.ByteWidth=sizeof(XHDLookParamsGPU);
+   cbd.Usage=D3D11_USAGE_DEFAULT;
+   cbd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+   HRESULT chr=dev->CreateBuffer(&cbd,nullptr,&xhdLookCB);
+   writeLog(SUCCEEDED(chr)?"XHDLook b13 GPU parameter bridge created":"XHDLook b13 parameter buffer creation FAILED");
+ }
  if(neutralizeT3 && !whiteT3){
   const unsigned char white[4]={255,255,255,255};
   D3D11_TEXTURE2D_DESC td={};td.Width=1;td.Height=1;td.MipLevels=1;td.ArraySize=1;td.Format=DXGI_FORMAT_R8G8B8A8_UNORM;td.SampleDesc.Count=1;td.Usage=D3D11_USAGE_IMMUTABLE;td.BindFlags=D3D11_BIND_SHADER_RESOURCE;
