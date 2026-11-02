@@ -48,7 +48,7 @@ def verify(path,variant):
     required={('SV_POSITION',0),('NORMAL',0),('TANGENT',0),('BINORMAL',0),
               ('TEXCOORD',0),('TEXCOORD',1),('TEXCOORD',2),('COLOR',0),('COLOR',1)}
     actual={(n,i) for n,i,_,_ in inputs}
-    if not actual.issubset(required) or ('SV_POSITION',0) not in actual:
+    if actual != required:
         raise ValueError('Unexpected or missing input semantic: '+str(actual))
     out={(n,i,mask) for n,i,mask,_ in outputs}
     expect={('SV_TARGET',0,15)}
@@ -61,6 +61,8 @@ def verify(path,variant):
         match=resources.get(name)
         if match is None or match[0]!=kind or match[2]!=slot or match[3]!=1:
             raise ValueError(f'RDEF binding mismatch for {name}: {match}, expected type={kind}, slot={slot}')
+    if any(v[0]==0 and v[2]==13 for v in resources.values()):
+        raise ValueError('b13 is reserved for MMShader DivaLiveParams; XHDLook must not override it')
     # Deliberately not testing numerical meaning of auxiliary RT.
     print(f'PASS structural DXBC {variant}: {path}. Not a rendering fidelity assertion.')
 
