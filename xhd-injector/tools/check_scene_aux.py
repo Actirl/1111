@@ -21,6 +21,16 @@ def verify(path):
             raise ValueError(f'Constant buffer {name} not at b{slot}: {value}')
     if any(row[0]==0 and row[2]==13 for row in resources.values()):
         raise ValueError('b13 must be reserved for MMShader')
+    if '--ibl' in sys.argv:
+        for name,slot in {'IBLLow':9,'IBLSharp':10,'IBLRough':11}.items():
+            resource=resources.get(name)
+            if resource is None or resource[0]!=2 or resource[2]!=slot:
+                raise ValueError(f'IBL resource {name} expected at t{slot}: {resource}')
+        sample=resources.get('S10')
+        if sample is None or sample[0]!=3 or sample[2]!=10:
+            raise ValueError('Specular IBL sampler s10 missing')
+        if any(row[0]==3 and row[2]==11 for row in resources.values()):
+            raise ValueError('Unexpected sampler s11: PC t10 and t11 use s10')
     print('PASS structural validation (not pixel equivalence):',path)
 
 if __name__=='__main__':
