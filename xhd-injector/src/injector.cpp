@@ -40,6 +40,15 @@ static void publishStatus(){
 static std::vector<unsigned char> replacement;
 static bool replacementOn=false;
 static bool discoveryOn=false;
+static unsigned char additionalTarget[16]={};
+static bool additionalTargetValid=false;
+static bool parseHash16(const wchar_t* value,unsigned char* output){
+ if(!value||wcslen(value)!=32)return false;
+ for(int i=0;i<16;++i){unsigned x=0;wchar_t c1=value[2*i],c2=value[2*i+1];
+  auto digit=[](wchar_t c)->int{return c>=L\'0\'&&c<=L\'9\'?c-L\'0\':c>=L\'A\'&&c<=L\'F\'?c-L\'A\'+10:c>=L\'a\'&&c<=L\'f\'?c-L\'a\'+10:-1;};
+  int a=digit(c1),b=digit(c2);if(a<0||b<0)return false;x=(unsigned)((a<<4)|b);output[i]=(unsigned char)x;}
+ return true;
+}
 static std::atomic<unsigned> discovered{0};
 static std::mutex discoveryMutex;
 static std::vector<std::string> seenShaderHashes;
@@ -304,6 +313,10 @@ static void setup(){
  swprintf_s(shader,L"%ls%ls",path,L"replacement.cso");
  replacementOn=GetPrivateProfileIntW(L"settings",L"enable_replacement",0,ini)!=0;
  discoveryOn=GetPrivateProfileIntW(L"settings",L"discover_shader_hashes",0,ini)!=0;
+ wchar_t hashSetting[80]={};
+ GetPrivateProfileStringW(L"settings",L"additional_shader_hash",L"",hashSetting,80,ini);
+ additionalTargetValid=parseHash16(hashSetting,additionalTarget);
+ if(additionalTargetValid)writeLog("Additional shader hash filter configured");
  neutralizeT3=GetPrivateProfileIntW(L"settings",L"neutralize_t3",0,ini)!=0;
  suppressIBL=GetPrivateProfileIntW(L"settings",L"suppress_ibl_t10_t11",0,ini)!=0;
  if(neutralizeT3||suppressIBL)replacementOn=false;
@@ -334,7 +347,7 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
    }
    if(fresh){char msg[120];sprintf_s(msg,"DISCOVERY_PIXEL_SHADER hash=%s bytes=%zu",key,(size_t)len);writeLog(msg);}
  }
- if(data&&len>=36&&memcmp(data,"DXBC",4)==0&&memcmp((const unsigned char*)data+4,target,16)==0){
+ if(data&&len>=36&&memcmp(data,"DXBC",4)==0&&(memcmp((const unsigned char*)data+4,target,16)==0 || (additionalTargetValid && memcmp((const unsigned char*)data+4,additionalTarget,16)==0))){
    hits.fetch_add(1,std::memory_order_relaxed);
    bool expected=false;
    if(len<=4*1024*1024 && captured.compare_exchange_strong(expected,true)){
@@ -370,7 +383,7 @@ static HRESULT STDMETHODCALLTYPE observe(ID3D11Device* dev,const void* data,SIZE
  }
  HRESULT result=original(dev,data,len,link,out);
  if((neutralizeT3||suppressIBL) && data && len>=36 && memcmp(data,"DXBC",4)==0 &&
-    memcmp((const unsigned char*)data+4,target,16)==0 && SUCCEEDED(result) && out && *out){
+    (memcmp((const unsigned char*)data+4,target,16)==0 || (additionalTargetValid && memcmp((const unsigned char*)data+4,additionalTarget,16)==0)) && SUCCEEDED(result) && out && *out){
    std::lock_guard<std::mutex> lock(shaderMutex);activeTargets.push_back(*out);
  }
  return result;
