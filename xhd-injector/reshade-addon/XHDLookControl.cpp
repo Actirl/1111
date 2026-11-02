@@ -1,7 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <reshade.hpp>
+#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
 #include <imgui.h>
+#include <reshade.hpp>
 #include <cstdint>
 #include <cstring>
 
