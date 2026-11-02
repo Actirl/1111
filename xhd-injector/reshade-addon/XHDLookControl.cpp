@@ -47,8 +47,8 @@ void overlay(reshade::api::effect_runtime*) {
  if (!shared) { ImGui::TextUnformatted("XHDLook: shared parameters unavailable"); return; }
  ImGui::TextUnformatted("XHD-Look Renderer - GPU parameter bridge");
  ImGui::TextUnformatted("WARNING: This is a diagnostic replacement shader, NOT XHD fidelity.");
- ImGui::TextUnformatted("Unchecking does not restore the original game shader.");
- ImGui::TextUnformatted("Disable replacement in xhd_injector.ini and restart for A/B.");
+ ImGui::TextUnformatted("OFF: original game pixel shader; ON: diagnostic replacement.");
+ ImGui::TextUnformatted("A/B requires the updated injector and working DrawIndexed hook.");
  ImGui::TextUnformatted("Skin/hair/clothes currently have no effect on GPU.");
  Parameters p=*shared;
  bool changed=false;
