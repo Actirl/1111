@@ -13,7 +13,6 @@ SamplerState S2:register(s2);
 SamplerState S3:register(s3);
 SamplerState S9:register(s9);
 SamplerState S10:register(s10);
-SamplerState S11:register(s11);
 cbuffer ShaderState:register(b0) { uint4 shaderState; };
 cbuffer Scene:register(b1) { float4 sceneRegisters[78]; };
 cbuffer Batch:register(b2) { float4 batchRegisters[51]; };
@@ -44,11 +43,26 @@ Output Main(Input i) {
  float3 matEmissive=max(batchRegisters[30].rgb,0);
  float3 matSpecular=max(batchRegisters[32].rgb,0);
  // Probe: t9/t10/t11 from captured PC resource layout, not PS4 evidence.
- // Cube coordinates and LOD numbers are provisional and must be checked.
- float3 iblDirection=N;
- float3 diffuseIBL=IBLLow.SampleLevel(S9,iblDirection,0).rgb;
- float3 sharpIBL=IBLSharp.SampleLevel(S10,iblDirection,0).rgb;
- float3 roughIBL=IBLRough.SampleLevel(S11,iblDirection,0).rgb;
+ // Reflection and normal transforms follow PC DXBC cb1[42..44] pattern; the
+ // view-direction mapping is provisional. Both specular cubes use sampler s10.
+ // PC DXBC maps local normal / reflection via cb1[42..44].xyz.
+ // Eye direction and normal interpolant spaces still need runtime confirmation.
+ float3 localView=safeNormalize(i.uv1.xyz);
+ float3 reflected=2.0*dot(localView,N)*N-localView;
+ float3 iblDirection=safeNormalize(float3(
+   dot(sceneRegisters[42].xyz,-reflected),
+   dot(sceneRegisters[43].xyz,-reflected),
+   dot(sceneRegisters[44].xyz,-reflected)));
+ float3 diffuseDirection=safeNormalize(float3(
+   dot(sceneRegisters[42].xyz,N),
+   dot(sceneRegisters[43].xyz,N),
+   dot(sceneRegisters[44].xyz,N)));
+ float3 diffuseLod0=IBLLow.SampleLevel(S9,diffuseDirection,0).rgb;
+ float3 diffuseLod1=IBLLow.SampleLevel(S9,diffuseDirection,1).rgb;
+ // Shadow-factor blend still needs original shadow-test path (t19).
+ float3 diffuseIBL=XHDPCDiffuseIBLBlend(diffuseLod0,diffuseLod1,1.0);
+ float3 sharpIBL=IBLSharp.Sample(S10,iblDirection).rgb;
+ float3 roughIBL=IBLRough.Sample(S10,iblDirection).rgb;
  float3 specIBL=XHDPCSpecularIBLBlend(roughIBL,sharpIBL,saturate(batchRegisters[31].x));
  float3 lit=base.rgb*matDiffuse*(ambient+direct+0.15*diffuseIBL);
  lit+=matEmissive+S*matSpecular*specIBL*saturate(tune.z)*0.15;
