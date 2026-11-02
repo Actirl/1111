@@ -7,7 +7,7 @@ def extract(text):
     output = {"inputs": {}, "outputs": {}, "resources": {}, "constant_buffers": {}}
     for line in text.splitlines():
         line = line.strip()
-        m = re.fullmatch(r'dcl_input_ps\s+\w+\s+v(\d+)\.([xyzw]+)', line)
+        m = re.fullmatch(r'dcl_input_ps\s+(?:\w+\s+)*v(\d+)\.([xyzw]+)', line)
         if m: output["inputs"]["v"+m[1]] = m[2]
         m = re.fullmatch(r'dcl_output\s+o(\d+)\.([xyzw]+)', line)
         if m: output["outputs"]["o"+m[1]] = m[2]
@@ -19,6 +19,9 @@ def extract(text):
 
 def compare(reference, candidate):
     errors = []
+    for key in ("inputs", "outputs"):
+        if not reference[key]: errors.append("reference has no parsed " + key)
+        if not candidate[key]: errors.append("candidate has no parsed " + key)
     for key in ("inputs", "outputs"):
         for reg, mask in reference[key].items():
             if candidate[key].get(reg) != mask:
